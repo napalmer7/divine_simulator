@@ -1,0 +1,6 @@
+{
+  "name": "Dawn of Worlds: Genesis of Deities",
+  "description": "A world-building deity simulation inspired by Dawn of Worlds. Shape terrain, weave custom miracles, synthesize intelligent races, and guide civilizations on a living 3D globe alongside autonomous rival deities.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
