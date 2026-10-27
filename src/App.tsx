@@ -11,6 +11,7 @@ import {
   Avatar,
   City,
   Civilization,
+  ClimateType,
   CustomMiracleTemplate,
   Deity,
   HistoryLogEntry,
@@ -25,10 +26,14 @@ import {
 import {
   DAWN_OF_WORLDS_COSTS,
   calculateRoundPower,
+  calculateShapingCost,
+  ShapingScope,
   AVAILABLE_TECHNOLOGIES,
   ActionPowerType,
 } from './simulation/dawnOfWorldsRules';
 import {
+  applyCascadingTerrainModification,
+  applyCascadingClimateModification,
   applyTerrainModification,
   generateInitialWorld,
   getAdjacentCellIndices,
@@ -331,14 +336,15 @@ export default function App() {
     );
   };
 
-  // Player Action: Shape Terrain
-  const handleShapeTerrain = (terrain: TerrainType) => {
-    const cost = DAWN_OF_WORLDS_COSTS.shape_land[currentAge];
+  // Player Action: Cascading Shape Terrain
+  const handleShapeTerrain = (terrain: TerrainType, scope: ShapingScope = 'cascade') => {
+    const baseCost = DAWN_OF_WORLDS_COSTS.shape_land[currentAge];
+    const cost = calculateShapingCost(baseCost, scope);
     if (playerDeity.power < cost) return;
 
     const targetIdx = selectedCellIndex !== null ? selectedCellIndex : Math.floor(cells.length / 2);
-    const updated = applyTerrainModification(cells, targetIdx, terrain, 1);
-    setCells(updated);
+    const { updatedCells, summary } = applyCascadingTerrainModification(cells, targetIdx, terrain, scope);
+    setCells(updatedCells);
     deductPlayerPower(cost);
 
     const targetCell = cells[targetIdx];
@@ -352,12 +358,39 @@ export default function App() {
       deityColor: playerDeity.color,
       actionType: 'Shape Land',
       cost,
-      title: `${playerDeity.name} Shaped ${terrain.replace('_', ' ')}`,
-      description: `Exercised divine will over the primeval bedrock, raising ${terrain.replace(
-        '_',
-        ' '
-      )} at coordinates [${targetCell.lat.toFixed(0)}°, ${targetCell.lon.toFixed(0)}°].`,
-      impact: `Geographical landscape transformed.`,
+      title: `${playerDeity.name} Cascaded ${terrain.replace('_', ' ')} (${scope.toUpperCase()})`,
+      description: summary.logNarrative,
+      impact: `Transformed ${summary.totalAffected} zones at [${targetCell.lat.toFixed(0)}°, ${targetCell.lon.toFixed(0)}°] (${summary.volcanoCount ? `${summary.volcanoCount} volcano, ` : ''}${summary.mountainCount ? `${summary.mountainCount} mountains, ` : ''}${summary.hillsCount ? `${summary.hillsCount} hills, ` : ''}${summary.plainsCount ? `${summary.plainsCount} plains, ` : ''}${summary.forestCount ? `${summary.forestCount} forests, ` : ''}${summary.swampCount ? `${summary.swampCount} swamps, ` : ''}${summary.shallowsCount ? `${summary.shallowsCount} coastal shallows` : ''}).`,
+      category: 'creation',
+    };
+    setHistory((prev) => [log, ...prev]);
+  };
+
+  // Player Action: Cascading Shape Climate
+  const handleShapeClimate = (climate: ClimateType, scope: ShapingScope = 'cascade') => {
+    const baseCost = DAWN_OF_WORLDS_COSTS.shape_climate[currentAge];
+    const cost = calculateShapingCost(baseCost, scope);
+    if (playerDeity.power < cost) return;
+
+    const targetIdx = selectedCellIndex !== null ? selectedCellIndex : Math.floor(cells.length / 2);
+    const { updatedCells, summary } = applyCascadingClimateModification(cells, targetIdx, climate, scope);
+    setCells(updatedCells);
+    deductPlayerPower(cost);
+
+    const targetCell = cells[targetIdx];
+    const log: HistoryLogEntry = {
+      id: `climate_${Date.now()}`,
+      age: currentAge,
+      round,
+      year,
+      deityId: playerDeity.id,
+      deityName: playerDeity.name,
+      deityColor: playerDeity.color,
+      actionType: 'Shape Climate',
+      cost,
+      title: `${playerDeity.name} Channeled ${climate.toUpperCase()} Skies (${scope.toUpperCase()})`,
+      description: summary,
+      impact: `Shifted regional climate and moisture around [${targetCell.lat.toFixed(0)}°, ${targetCell.lon.toFixed(0)}°].`,
       category: 'creation',
     };
     setHistory((prev) => [log, ...prev]);
@@ -818,6 +851,7 @@ export default function App() {
           onOpenRaceSynthesizer={() => setIsRaceModalOpen(true)}
           onOpenMiracleWeaver={() => setIsMiracleModalOpen(true)}
           onShapeTerrain={handleShapeTerrain}
+          onShapeClimate={handleShapeClimate}
           onExecuteAction={handleExecuteGeneralAction}
         />
       </main>

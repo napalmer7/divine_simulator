@@ -1,11 +1,11 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
 import React, { useState } from 'react';
-import { ActionPowerType, DAWN_OF_WORLDS_COSTS } from '../simulation/dawnOfWorldsRules';
-import { AgeId, TerrainType, WorldCell } from '../types/game';
+import {
+  ActionPowerType,
+  DAWN_OF_WORLDS_COSTS,
+  calculateShapingCost,
+  ShapingScope,
+} from '../simulation/dawnOfWorldsRules';
+import { AgeId, ClimateType, TerrainType, WorldCell } from '../types/game';
 import {
   Mountain,
   Sun,
@@ -21,6 +21,10 @@ import {
   TreePine,
   Waves,
   Hammer,
+  Droplets,
+  Wind,
+  ThermometerSnowflake,
+  Compass,
 } from 'lucide-react';
 
 interface ControlDockProps {
@@ -29,7 +33,8 @@ interface ControlDockProps {
   selectedCell: WorldCell | null;
   onOpenRaceSynthesizer: () => void;
   onOpenMiracleWeaver: () => void;
-  onShapeTerrain: (terrain: TerrainType) => void;
+  onShapeTerrain: (terrain: TerrainType, scope: ShapingScope) => void;
+  onShapeClimate: (climate: ClimateType, scope: ShapingScope) => void;
   onExecuteAction: (actionType: ActionPowerType, extraPayload?: any) => void;
 }
 
@@ -40,12 +45,17 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   onOpenRaceSynthesizer,
   onOpenMiracleWeaver,
   onShapeTerrain,
+  onShapeClimate,
   onExecuteAction,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [activeCategory, setActiveCategory] = useState<'land' | 'life' | 'civilization' | 'wrath'>('land');
+  const [shapingScope, setShapingScope] = useState<ShapingScope>('cascade');
+  const [landSubTab, setLandSubTab] = useState<'geology' | 'climate'>('geology');
 
   const costs = DAWN_OF_WORLDS_COSTS;
+  const landCost = calculateShapingCost(costs.shape_land[currentAge], shapingScope);
+  const climateCost = calculateShapingCost(costs.shape_climate[currentAge], shapingScope);
 
   return (
     <div
@@ -131,7 +141,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 <span className="text-amber-300 font-semibold">
                   [{selectedCell.lat.toFixed(0)}°, {selectedCell.lon.toFixed(0)}°]{' '}
                   <span className="capitalize font-normal text-slate-300">
-                    ({selectedCell.terrain.replace('_', ' ')})
+                    ({selectedCell.terrain.replace('_', ' ')} • {selectedCell.climate})
                   </span>
                 </span>
               ) : (
@@ -140,72 +150,249 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             </div>
           </div>
 
+          {/* Granularity & Scope Controls for Land & Sky */}
+          {activeCategory === 'land' && (
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1 pb-2.5 mb-2 border-b border-slate-800/60 text-[11px]">
+              {/* Sub-tab: Geology vs Climate */}
+              <div className="flex gap-1 bg-slate-900 p-0.5 rounded-lg border border-slate-800">
+                <button
+                  onClick={() => setLandSubTab('geology')}
+                  className={`px-2.5 py-1 rounded-md font-medium transition flex items-center gap-1 ${
+                    landSubTab === 'geology'
+                      ? 'bg-amber-600/30 text-amber-200 border border-amber-500/40'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Mountain className="w-3 h-3 text-amber-400" /> Geologic Terrain ({landCost} Pts)
+                </button>
+                <button
+                  onClick={() => setLandSubTab('climate')}
+                  className={`px-2.5 py-1 rounded-md font-medium transition flex items-center gap-1 ${
+                    landSubTab === 'climate'
+                      ? 'bg-cyan-600/30 text-cyan-200 border border-cyan-500/40'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Wind className="w-3 h-3 text-cyan-400" /> Climate Currents ({climateCost} Pts)
+                </button>
+              </div>
+
+              {/* Scope & Granularity Selector */}
+              <div className="flex items-center gap-1.5 bg-slate-900/90 p-1 rounded-xl border border-slate-800">
+                <span className="text-slate-400 font-medium px-1 flex items-center gap-1">
+                  <Compass className="w-3 h-3 text-amber-400" /> Ripple Scope:
+                </span>
+                <button
+                  onClick={() => setShapingScope('cascade')}
+                  className={`px-2 py-0.5 rounded-md transition ${
+                    shapingScope === 'cascade'
+                      ? 'bg-amber-600 text-slate-950 font-bold shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Full cascading physics ripple across 4 concentric rings (e.g. Volcano -> Mountains -> Hills -> Plains -> Shallows)"
+                >
+                  Tectonic Cascade (4 Rings)
+                </button>
+                <button
+                  onClick={() => setShapingScope('regional')}
+                  className={`px-2 py-0.5 rounded-md transition ${
+                    shapingScope === 'regional'
+                      ? 'bg-amber-600 text-slate-950 font-bold shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Moderate regional ripple across 2 concentric rings at reduced power cost"
+                >
+                  Regional (2 Rings)
+                </button>
+                <button
+                  onClick={() => setShapingScope('pinpoint')}
+                  className={`px-2 py-0.5 rounded-md transition ${
+                    shapingScope === 'pinpoint'
+                      ? 'bg-amber-600 text-slate-950 font-bold shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Precision surgical modification of a single cell at lowest power cost"
+                >
+                  Pinpoint (1 Cell)
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Action Buttons for Active Tab */}
           <div className="flex flex-wrap items-center gap-2">
-            {activeCategory === 'land' && (
+            {activeCategory === 'land' && landSubTab === 'geology' && (
               <>
                 <button
-                  onClick={() => onShapeTerrain('mountains')}
-                  disabled={playerPower < costs.shape_land[currentAge]}
-                  className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-slate-700/80 flex items-center gap-2 text-slate-200 transition"
-                  title="Raise high mountain ridges and granite spires"
-                >
-                  <Mountain className="w-4 h-4 text-stone-400" />
-                  <div className="text-left">
-                    <div className="font-semibold text-white">Raise Mountains</div>
-                    <div className="text-[10px] text-amber-400">{costs.shape_land[currentAge]} Power</div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => onShapeTerrain('forest')}
-                  disabled={playerPower < costs.shape_land[currentAge]}
-                  className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-slate-700/80 flex items-center gap-2 text-slate-200 transition"
-                  title="Seed lush ancient woodlands"
-                >
-                  <TreePine className="w-4 h-4 text-emerald-400" />
-                  <div className="text-left">
-                    <div className="font-semibold text-white">Seed Forests</div>
-                    <div className="text-[10px] text-amber-400">{costs.shape_land[currentAge]} Power</div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => onShapeTerrain('plains')}
-                  disabled={playerPower < costs.shape_land[currentAge]}
-                  className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-slate-700/80 flex items-center gap-2 text-slate-200 transition"
-                  title="Flatten jagged crags into fertile grasslands"
-                >
-                  <Sun className="w-4 h-4 text-yellow-400" />
-                  <div className="text-left">
-                    <div className="font-semibold text-white">Fertile Plains</div>
-                    <div className="text-[10px] text-amber-400">{costs.shape_land[currentAge]} Power</div>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => onShapeTerrain('volcanic')}
-                  disabled={playerPower < costs.shape_land[currentAge]}
-                  className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-slate-700/80 flex items-center gap-2 text-slate-200 transition"
-                  title="Erupt volcanic calderas rich in ores"
+                  onClick={() => onShapeTerrain('volcanic', shapingScope)}
+                  disabled={playerPower < landCost}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-red-500/40 flex items-center gap-2 text-slate-200 transition"
+                  title="Erupt volcanic caldera triggering mountain ring, foothills, and fertile ash lowlands"
                 >
                   <Flame className="w-4 h-4 text-red-500" />
                   <div className="text-left">
                     <div className="font-semibold text-white">Volcanic Crags</div>
-                    <div className="text-[10px] text-amber-400">{costs.shape_land[currentAge]} Power</div>
+                    <div className="text-[10px] text-amber-400">{landCost} Power</div>
                   </div>
                 </button>
 
                 <button
-                  onClick={() => onShapeTerrain('deep_ocean')}
-                  disabled={playerPower < costs.shape_land[currentAge]}
-                  className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-slate-700/80 flex items-center gap-2 text-slate-200 transition"
-                  title="Sink land into ocean depths"
+                  onClick={() => onShapeTerrain('mountains', shapingScope)}
+                  disabled={playerPower < landCost}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-slate-700/80 flex items-center gap-2 text-slate-200 transition"
+                  title="Raise high mountain ridges, alpine crests, and foothills"
                 >
-                  <Waves className="w-4 h-4 text-sky-500" />
+                  <Mountain className="w-4 h-4 text-stone-300" />
+                  <div className="text-left">
+                    <div className="font-semibold text-white">Raise Mountains</div>
+                    <div className="text-[10px] text-amber-400">{landCost} Power</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => onShapeTerrain('hills', shapingScope)}
+                  disabled={playerPower < landCost}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-amber-700/60 flex items-center gap-2 text-slate-200 transition"
+                  title="Raise rugged rolling hills and highland plateaus descending into plains"
+                >
+                  <Mountain className="w-4 h-4 text-amber-500" />
+                  <div className="text-left">
+                    <div className="font-semibold text-white">Rolling Hills</div>
+                    <div className="text-[10px] text-amber-400">{landCost} Power</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => onShapeTerrain('swamp', shapingScope)}
+                  disabled={playerPower < landCost}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-lime-700/60 flex items-center gap-2 text-slate-200 transition"
+                  title="Sink land into mist-shrouded swamps, wetlands, bayous, and fens"
+                >
+                  <Droplets className="w-4 h-4 text-lime-400" />
+                  <div className="text-left">
+                    <div className="font-semibold text-white">Swamps & Mires</div>
+                    <div className="text-[10px] text-amber-400">{landCost} Power</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => onShapeTerrain('forest', shapingScope)}
+                  disabled={playerPower < landCost}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-emerald-700/60 flex items-center gap-2 text-slate-200 transition"
+                  title="Seed lush ancient woodlands with transpiration rainfall"
+                >
+                  <TreePine className="w-4 h-4 text-emerald-400" />
+                  <div className="text-left">
+                    <div className="font-semibold text-white">Seed Forests</div>
+                    <div className="text-[10px] text-amber-400">{landCost} Power</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => onShapeTerrain('plains', shapingScope)}
+                  disabled={playerPower < landCost}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-yellow-700/60 flex items-center gap-2 text-slate-200 transition"
+                  title="Flatten into fertile grasslands, savannas, and meadows"
+                >
+                  <Sun className="w-4 h-4 text-yellow-400" />
+                  <div className="text-left">
+                    <div className="font-semibold text-white">Fertile Plains</div>
+                    <div className="text-[10px] text-amber-400">{landCost} Power</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => onShapeTerrain('desert', shapingScope)}
+                  disabled={playerPower < landCost}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-orange-800/60 flex items-center gap-2 text-slate-200 transition"
+                  title="Scorch soil into dry desert dunes and arid steppes"
+                >
+                  <Sun className="w-4 h-4 text-orange-400" />
+                  <div className="text-left">
+                    <div className="font-semibold text-white">Arid Desert</div>
+                    <div className="text-[10px] text-amber-400">{landCost} Power</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => onShapeTerrain('deep_ocean', shapingScope)}
+                  disabled={playerPower < landCost}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-sky-800/60 flex items-center gap-2 text-slate-200 transition"
+                  title="Cleave abyssal ocean trench eroding surrounding coastline"
+                >
+                  <Waves className="w-4 h-4 text-sky-400" />
                   <div className="text-left">
                     <div className="font-semibold text-white">Sink Ocean</div>
-                    <div className="text-[10px] text-amber-400">{costs.shape_land[currentAge]} Power</div>
+                    <div className="text-[10px] text-amber-400">{landCost} Power</div>
+                  </div>
+                </button>
+              </>
+            )}
+
+            {activeCategory === 'land' && landSubTab === 'climate' && (
+              <>
+                <button
+                  onClick={() => onShapeClimate('tropical', shapingScope)}
+                  disabled={playerPower < climateCost}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-emerald-500/40 flex items-center gap-2 text-slate-200 transition"
+                  title="Channel warm tropical monsoons, high humidity, and lush vegetation"
+                >
+                  <Sun className="w-4 h-4 text-emerald-400" />
+                  <div className="text-left">
+                    <div className="font-semibold text-white">Tropical Monsoons</div>
+                    <div className="text-[10px] text-cyan-400">{climateCost} Power</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => onShapeClimate('temperate', shapingScope)}
+                  disabled={playerPower < climateCost}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-sky-500/40 flex items-center gap-2 text-slate-200 transition"
+                  title="Brings balanced temperate rainfall and fertile seasons"
+                >
+                  <Droplets className="w-4 h-4 text-sky-400" />
+                  <div className="text-left">
+                    <div className="font-semibold text-white">Temperate Rains</div>
+                    <div className="text-[10px] text-cyan-400">{climateCost} Power</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => onShapeClimate('arctic', shapingScope)}
+                  disabled={playerPower < climateCost}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-cyan-500/40 flex items-center gap-2 text-slate-200 transition"
+                  title="Summon freezing polar winds, permafrost, and glacial ice packs"
+                >
+                  <ThermometerSnowflake className="w-4 h-4 text-cyan-300" />
+                  <div className="text-left">
+                    <div className="font-semibold text-white">Arctic Frost</div>
+                    <div className="text-[10px] text-cyan-400">{climateCost} Power</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => onShapeClimate('arid', shapingScope)}
+                  disabled={playerPower < climateCost}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-amber-500/40 flex items-center gap-2 text-slate-200 transition"
+                  title="Enforce scorching sun and drought across continental steppes"
+                >
+                  <Sun className="w-4 h-4 text-amber-500" />
+                  <div className="text-left">
+                    <div className="font-semibold text-white">Arid Drought</div>
+                    <div className="text-[10px] text-cyan-400">{climateCost} Power</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => onShapeClimate('geothermal', shapingScope)}
+                  disabled={playerPower < climateCost}
+                  className="px-2.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-red-500/40 flex items-center gap-2 text-slate-200 transition"
+                  title="Heat the atmosphere with sulfuric geothermal steam vents"
+                >
+                  <Flame className="w-4 h-4 text-red-500" />
+                  <div className="text-left">
+                    <div className="font-semibold text-white">Geothermal Vents</div>
+                    <div className="text-[10px] text-cyan-400">{climateCost} Power</div>
                   </div>
                 </button>
               </>

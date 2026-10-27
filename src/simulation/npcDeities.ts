@@ -366,7 +366,7 @@ export function executeNpcTurn(
       const capCity = currentCities.find((c) => c.id === myCiv.capitalCityId);
       if (capCity) {
         const neighbors = getAdjacentCellIndices(capCity.cellIndex, 2);
-        const freeCell = neighbors.map((idx) => currentCells[idx]).find((c) => c && c.elevation > 0 && !c.cityId);
+        const freeCell = neighbors.map((idx: number) => currentCells[idx]).find((c: WorldCell | undefined) => Boolean(c && c.elevation > 0 && !c.cityId));
         if (freeCell) {
           const newCityId = `city_${npc.id}_${Date.now()}`;
           const newCity: City = {

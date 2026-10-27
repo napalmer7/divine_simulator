@@ -26,6 +26,27 @@ export type ActionPowerType =
   | 'catastrophe'
   | 'custom_miracle';
 
+export type ShapingScope = 'pinpoint' | 'regional' | 'cascade';
+
+/**
+ * Calculates divine power cost based on operation granularity / scope:
+ * - 'cascade' (Full 4-ring tectonic cascade): Full standard rulebook cost
+ * - 'regional' (2-ring ripple): Reduced cost
+ * - 'pinpoint' (1-cell surgical precision): Minimum cost (1-3 pts)
+ */
+export function calculateShapingCost(
+  baseCost: number,
+  scope: ShapingScope
+): number {
+  if (scope === 'pinpoint') {
+    return Math.max(1, Math.round(baseCost / 3));
+  }
+  if (scope === 'regional') {
+    return Math.max(1, Math.round((baseCost * 2) / 3));
+  }
+  return baseCost;
+}
+
 /**
  * Dawn of Worlds exact costs table (Page 7 of official rulebook)
  */
