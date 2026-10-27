@@ -863,6 +863,7 @@ export default function App() {
         currentAge={currentAge}
         playerPower={playerDeity.power}
         existingRaces={races}
+        targetCell={selectedCell}
         onCreateRace={handleCreateRace}
       />
 

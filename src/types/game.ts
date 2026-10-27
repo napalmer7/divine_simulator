@@ -113,12 +113,15 @@ export interface RacePhysiology {
   metabolism: string;
 }
 
+export type RaceCategory = 'civilized' | 'monstrous' | 'aberration';
+
 export type IntelligenceLevel =
   | 'instinctual'
   | 'cunning'
   | 'scholastic'
   | 'arcane_network'
-  | 'transcendent';
+  | 'transcendent'
+  | 'feral_madness';
 
 export type SocietalBehavior =
   | 'nomadic'
@@ -127,7 +130,14 @@ export type SocietalBehavior =
   | 'mercantile'
   | 'tribal'
   | 'scholarly'
-  | 'zealous_inquisition';
+  | 'zealous_inquisition'
+  | 'feudal_monarchy'
+  | 'theocracy'
+  | 'communal_democracy'
+  | 'hive_collective'
+  | 'raider_plunderers'
+  | 'anarchic_survivalist'
+  | 'necrocracy';
 
 export interface Race {
   id: string;
@@ -135,6 +145,7 @@ export interface Race {
   demonym: string;
   creatorDeityId: string;
   parentRaceId: string | null;
+  category?: RaceCategory;
   description: string;
   traits: string[];
   physiology: RacePhysiology;

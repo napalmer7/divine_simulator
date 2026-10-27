@@ -29,9 +29,13 @@ An interactive deity world-building sandbox game inspired by the legendary table
   - **Comprehensive Biome Palette**: Volcanic Crags, Mountain Peaks, Rolling Hills, Swamps & Mires, Ancient Forests, Fertile Plains, Arid Deserts, and Abyssal Oceans.
   - **Granularity & Scope Scaling**: Switch between *Tectonic Cascade (4 Rings)*, *Regional (2 Rings)*, or *Pinpoint (1 Cell)* with dynamically scaled divine power costs.
 
-- **Genetic Species Synthesizer**:
-  - Customize physiology, integument (scales, plumage, chitin, fur), internal anatomy, sensory perception, intelligence levels, and societal philosophies.
-  - Generates bespoke racial stat modifiers (Martial, Arcane, Industry, Fertility, Adaptability) affecting population growth and civilization expansion.
+- **Genetic Species Synthesizer & Subrace Evolution**:
+  - **Mortal & Monstrous Classifications**: Synthesize civilized mortal species (Humans, Elves, Dwarves, Halflings) or monstrous/savage broods (Orcs, Goblins, Kobolds, Troglodytes, Undead Revenants, Chitin Swarms).
+  - **Subrace Mutation with Parent Prefill**: Splinter existing races into adapted offshoots at reduced divine cost, pre-filling parent traits and automatically formatting the species name with the primary parent in parentheses (e.g. `Sandborne (Human)`, `Woodland (Elf)`).
+  - **Species Name Generator**: Roll evocative fantasy names based on race category, biomes, and subrace hierarchy.
+  - **Location-Anchored Myth & Lore Generator**: Weaves rich origin stories and cultural lore tailored directly to the selected world tile's terrain, climate, elevation, and resources using standard fantasy tropes.
+  - **Everyday & Exotic Genetic Options**: Normal humanoid skin, leathery hide, silken fair epidermis, reptilian scales, chitinous carapace, necrotic flesh; normal trichromatic vision, low-light/twilight vision, infrared darkvision; normal scholastic thoughts, survival cunning, telepathic networks, and monstrous bloodlust.
+  - **Expanded Societal Philosophies**: Feudal Monarchy & Chivalry, Mercantile Guilds, Militaristic Hegemony, Arcane Magocracy, Monastic Craft Enclaves, Totemic Clans, Nomadic Herders, Holy Theocracy, Communal Democracy, Brood Hive Collective, Reaver Enclaves, Anarchic Wildlings, and Undead Necrocracy.
 
 - **Autonomous NPC Deities**:
   - Deities with unique domains (Earthforging, Nature, Necromancy, Sun/Law), distinct personality traits (aggression, harmony, expansion, curiosity), and dynamic rivalry/alliance relationship scores.
