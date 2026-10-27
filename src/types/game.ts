@@ -103,6 +103,9 @@ export interface Deity {
   color: string;
   avatarId: string | null;
   relationships: Record<string, number>; // -100 (mortal rival) to +100 (devoted ally)
+  myth?: string;
+  historicalGoals?: string[];
+  ethos?: string;
 }
 
 export interface RacePhysiology {
@@ -288,4 +291,41 @@ export type MapViewMode =
   | 'political'
   | 'population'
   | 'trade'
-  | 'conflicts';
+  | 'conflicts'
+  | 'resources';
+
+export type WorldStructureType =
+  | 'continental'
+  | 'pangea'
+  | 'archipelago'
+  | 'shattered'
+  | 'waterworld';
+
+export interface SavedGameSlot {
+  id: string;
+  saveName: string;
+  timestamp: number;
+  saveDateFormatted: string;
+  age: AgeId;
+  round: number;
+  year: number;
+  playerDeityName: string;
+  playerDeityTitle: string;
+  deityCount: number;
+  worldStructure: WorldStructureType;
+  cells: WorldCell[];
+  cities: City[];
+  civilizations: Civilization[];
+  races: Race[];
+  armies: Army[];
+  avatars: Avatar[];
+  orders: OrderItem[];
+  tradeRoutes: TradeRoute[];
+  conflicts: TerritorialConflict[];
+  deities: Deity[];
+  turnOrder: string[];
+  activeDeityIndex: number;
+  history: HistoryLogEntry[];
+  mapViewMode: MapViewMode;
+  is3DMode: boolean;
+}

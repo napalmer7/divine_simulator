@@ -19,13 +19,23 @@ An interactive deity world-building sandbox game inspired by the legendary table
 
 ## Features
 
-- **Interactive 3D Living Globe & 2D Parchment Atlas**:
+- **Interactive 3D Living Globe & 2D Cartographer's Atlas**:
   - WebGL globe rendered with Three.js, complete with dynamic atmosphere, day/night rim lighting, coordinate reticles, 3D city bastions, avatars, marching armies, and parabolic trade arcs.
+  - **Multi-Block Selection via Click-and-Drag Motion**:
+    - Select multiple adjacent (orthogonally or diagonally adjacent) world blocks with an intuitive click-and-drag motion on both the 3D Globe and 2D Cartographer's Table.
+    - **Toggable Drag Multi-Select Mode**: Toggle "Drag Multi-Select" in the viewport overlay, or simply hold `Shift` while dragging to seamlessly sweep across adjacent tiles.
+    - **Power Cost Scaling**: Faithfully scales divine power costs per user rule: **+1 Power Cost** for the first 2 blocks, and **+2 Power Cost** for every block beyond that (`baseCost + 1 + (N - 2) * 2` for $N \ge 2$).
+  - **Exact World Segment Highlight**: Replaced circular indicators with curved spherical quad mesh and outline highlights that conform directly to the precise borders and curvature of the selected or moused-over world segment.
+  - **Pause / Resume Globe Rotation Toggle**: Interactive button in the 3D viewport control bar to pause automatic planetary rotation for precision inspections or resume smooth rotation anytime.
   - Seamless toggle to a vintage 2D cartographer's parchment projection.
-  - Multiple view filters: Physical Biomes, Political Borders & Civilizations, Population Density Heatmap, Trade Routes, and Active Conflicts.
+  - **High-Visibility Resource Display**: Mineral and magical veins are clearly depicted on the 2D map with glowing glyphs (💎 Mithril/Gems, ⛏ Ore/Gold/Quarry, 🔮 Mana Springs, 🌾 Fertile Delta, 🌲 Timber), a toggleable high-contrast resource overlay, and an interactive Section Inspector card detailing exact location, elevation, climate, and economic/military bonuses.
+  - View filters: Geography, Biomes & Climate, Resources, Political Borders, Population Density Heatmap, Trade Routes, and Active Conflicts.
 
-- **Cascading Tectonic & Climate Physics**:
-  - **Tectonic Ripples**: Introducing a volcanic crag in the ocean uplifts a caldera epicenter, a ring of jagged mountains, rugged foothills, fertile ash plains/forests, and shallow coastal shelves.
+- **Cascading Tectonic & Ocean Sinking Physics**:
+  - **Tectonic Cascades**: Uplifting volcanic crags or mountain ranges triggers outward tectonic ripples, forming epicenters, rugged foothills, fertile ash plains, and coastal shelves.
+  - **True Ocean Sinking & Trench Deepening**:
+    - Sinking ocean near shallow water systematically depresses water depths: `shallow_water` $\rightarrow$ `ocean`, and `ocean` $\rightarrow$ `deep_ocean`.
+    - **Monotonic Lowering Guarantee**: Sinking water preserves deep abyssal trenches and never accidentally uplifts existing ocean or deep ocean into shallow water in outer impact zones.
   - **Comprehensive Biome Palette**: Volcanic Crags, Mountain Peaks, Rolling Hills, Swamps & Mires, Ancient Forests, Fertile Plains, Arid Deserts, and Abyssal Oceans.
   - **Granularity & Scope Scaling**: Switch between *Tectonic Cascade (4 Rings)*, *Regional (2 Rings)*, or *Pinpoint (1 Cell)* with dynamically scaled divine power costs.
 
@@ -35,10 +45,10 @@ An interactive deity world-building sandbox game inspired by the legendary table
   - **Species Name Generator**: Roll evocative fantasy names based on race category, biomes, and subrace hierarchy.
   - **Location-Anchored Myth & Lore Generator**: Weaves rich origin stories and cultural lore tailored directly to the selected world tile's terrain, climate, elevation, and resources using standard fantasy tropes.
   - **Everyday & Exotic Genetic Options**: Normal humanoid skin, leathery hide, silken fair epidermis, reptilian scales, chitinous carapace, necrotic flesh; normal trichromatic vision, low-light/twilight vision, infrared darkvision; normal scholastic thoughts, survival cunning, telepathic networks, and monstrous bloodlust.
-  - **Expanded Societal Philosophies**: Feudal Monarchy & Chivalry, Mercantile Guilds, Militaristic Hegemony, Arcane Magocracy, Monastic Craft Enclaves, Totemic Clans, Nomadic Herders, Holy Theocracy, Communal Democracy, Brood Hive Collective, Reaver Enclaves, Anarchic Wildlings, and Undead Necrocracy.
+  - **Expanded Societal Philosophies**: Feudal Monarchy, Mercantile Guilds, Militaristic Hegemony, Arcane Magocracy, Monastic Craft Enclaves, Totemic Clans, Nomadic Herders, Holy Theocracy, Communal Democracy, Brood Hive Collective, Reaver Enclaves, Anarchic Wildlings, and Undead Necrocracy.
 
 - **Autonomous NPC Deities**:
-  - Deities with unique domains (Earthforging, Nature, Necromancy, Sun/Law), distinct personality traits (aggression, harmony, expansion, curiosity), and dynamic rivalry/alliance relationship scores.
+  - Deities with unique domains (Earthforging, Nature, Necromancy, Sun/Law, Oceans, Void Arcana), distinct personality traits, and dynamic rivalry/alliance relationship scores.
   - Automated AI turn execution adhering to official *Dawn of Worlds* turn orders and power costs.
 
 - **Emergent Geopolitics & Tactical Conflicts**:

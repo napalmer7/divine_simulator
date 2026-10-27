@@ -8,32 +8,7 @@ import { AVAILABLE_TECHNOLOGIES, DAWN_OF_WORLDS_COSTS } from './dawnOfWorldsRule
 import { PRESET_RACES } from './races';
 import { applyTerrainModification, getAdjacentCellIndices } from './worldGrid';
 
-export const INITIAL_DEITIES: Deity[] = [
-  {
-    id: 'deity_player',
-    name: 'Aethelgard',
-    title: 'The Prime Shaper',
-    domain: 'Creation & Will',
-    symbol: '✧',
-    isPlayer: true,
-    power: 12,
-    thriftBonus: 0,
-    lastRoll: [4, 4],
-    personality: {
-      aggression: 0.5,
-      harmony: 0.5,
-      expansion: 0.5,
-      curiosity: 0.8,
-    },
-    color: '#818cf8', // Indigo
-    avatarId: null,
-    relationships: {
-      deity_vulcanus: 15,
-      deity_sylvana: 25,
-      deity_morvath: -10,
-      deity_aurelia: 30,
-    },
-  },
+export const CANDIDATE_NPC_DEITIES: Deity[] = [
   {
     id: 'deity_vulcanus',
     name: 'Vulcanus',
@@ -57,7 +32,16 @@ export const INITIAL_DEITIES: Deity[] = [
       deity_sylvana: 10,
       deity_morvath: -35,
       deity_aurelia: 20,
+      deity_thalassor: -15,
+      deity_xyrakis: -10,
     },
+    myth: 'Awakened from the white-hot primordial core of Meglin, Vulcanus strikes the cosmic anvil to raise impassable mountain fortresses and enrich the earth with veins of gold, silver, and runic ore.',
+    historicalGoals: [
+      'Uplift impenetrable alpine cordilleras across the continent',
+      'Endow dwarven and artisan mortals with invincible metallurgical secrets',
+      'Chisel wondrous subterranean vaults that withstand celestial cataclysms',
+    ],
+    ethos: 'Unyielding Endurance, Master Stonework, and Sacred Smithcraft',
   },
   {
     id: 'deity_sylvana',
@@ -82,7 +66,16 @@ export const INITIAL_DEITIES: Deity[] = [
       deity_vulcanus: 10,
       deity_morvath: -55,
       deity_aurelia: 35,
+      deity_thalassor: 15,
+      deity_xyrakis: -40,
     },
+    myth: 'Born of the first dewdrop that kissed the primordial soil, Sylvana breathes transpiration rainfall across the continents, weaving deep emerald old-growth canopies and guarding holy groves against defilement.',
+    historicalGoals: [
+      'Cover all fertile lands in ancient, whispering primeval woodlands',
+      'Foster peaceful, long-lived mortal races attuned to arcane nature',
+      'Cleanse corrupting blights, volcanic scorch marks, and desecrated soils',
+    ],
+    ethos: 'Ecological Harmony, Sacred Verdancy, and Preservation of Life',
   },
   {
     id: 'deity_morvath',
@@ -107,7 +100,16 @@ export const INITIAL_DEITIES: Deity[] = [
       deity_vulcanus: -35,
       deity_sylvana: -55,
       deity_aurelia: -60,
+      deity_thalassor: -20,
+      deity_xyrakis: 25,
     },
+    myth: 'Manifesting from the abyssal rifts and cosmic silence, Morvath believes mortals only achieve true greatness through ruthless adversity, lethal ambition, and conquering survival of the fittest.',
+    historicalGoals: [
+      'Submerge weak river valleys into treacherous, fog-shrouded swamps and mire',
+      'Spawn relentless warrior clans and monstrous legions to conquer rival realms',
+      'Overthrow complacent lawful theocracies through cunning subversion',
+    ],
+    ethos: 'Apex Dominion, Ruthless Ambition, and Darwinian Supremacy',
   },
   {
     id: 'deity_aurelia',
@@ -132,9 +134,475 @@ export const INITIAL_DEITIES: Deity[] = [
       deity_vulcanus: 20,
       deity_sylvana: 35,
       deity_morvath: -60,
+      deity_thalassor: 10,
+      deity_xyrakis: -30,
     },
+    myth: 'Aurelia descended on rays of blinding solar fire, bringing the codex of cosmic justice, architecture, scholastic universities, and mutual trade to mortals adrift in ignorance.',
+    historicalGoals: [
+      'Cultivate vast arable plains and interconnected trade leagues',
+      'Inspire grand marble cities, soaring academies, and knightly orders',
+      'Wage righteous holy crusades against discordant and monstrous horrors',
+    ],
+    ethos: 'Enlightened Reason, Sacred Justice, and Global Prosperity',
+  },
+  {
+    id: 'deity_thalassor',
+    name: 'Thalassor',
+    title: 'The Abyssal Sovereign',
+    domain: 'Oceans & Tempests',
+    symbol: '♒',
+    isPlayer: false,
+    power: 12,
+    thriftBonus: 0,
+    lastRoll: [4, 5],
+    personality: {
+      aggression: 0.5,
+      harmony: 0.4,
+      expansion: 0.6,
+      curiosity: 0.7,
+    },
+    color: '#06b6d4', // Cyan
+    avatarId: null,
+    relationships: {
+      deity_player: 10,
+      deity_vulcanus: -20,
+      deity_sylvana: 20,
+      deity_morvath: -15,
+      deity_aurelia: 10,
+      deity_xyrakis: 15,
+    },
+    myth: 'Ruler of the rolling tides and abyssal depths, Thalassor commands monsoon tempests and oceanic leviathans, claiming all coasts and undersea coral realms as eternal divine territory.',
+    historicalGoals: [
+      'Inundate lowlands into thriving coral shallows and oceanic gulfs',
+      'Guide maritime mortal civilizations to dominate transoceanic trade lanes',
+      'Unleash tidal maelstroms against arrogant land-bound conquerors',
+    ],
+    ethos: 'Fluid Adaptability, Oceanic Depths, and Storm Sovereign',
+  },
+  {
+    id: 'deity_xyrakis',
+    name: 'Xyrakis',
+    title: 'The Void Weaver',
+    domain: 'Forbidden Arcana & Secrets',
+    symbol: '👁',
+    isPlayer: false,
+    power: 12,
+    thriftBonus: 0,
+    lastRoll: [6, 2],
+    personality: {
+      aggression: 0.6,
+      harmony: 0.2,
+      expansion: 0.5,
+      curiosity: 0.95,
+    },
+    color: '#a855f7', // Purple
+    avatarId: null,
+    relationships: {
+      deity_player: 0,
+      deity_vulcanus: -10,
+      deity_sylvana: -40,
+      deity_morvath: 25,
+      deity_aurelia: -30,
+      deity_thalassor: 15,
+    },
+    myth: 'Existing between the folds of space and stellar rifts, Xyrakis observes the tapestry of mortal destinies, whispering enigmatic secrets and unraveling reality with forbidden leylines.',
+    historicalGoals: [
+      'Seed esoteric arcane monoliths and reality-bending anomalies',
+      'Awaken telepathic hive-minds and occult scholastic cabals',
+      'Collect lost artifacts and divine secrets from fallen civilizations',
+    ],
+    ethos: 'Occult Mastery, Hidden Knowledge, and Transcendent Will',
+  },
+  {
+    id: 'deity_solaria',
+    name: 'Solaria',
+    title: 'Lady of the Dawning Sun',
+    domain: 'Light & Solar Fire',
+    symbol: '☼',
+    isPlayer: false,
+    power: 12,
+    thriftBonus: 0,
+    lastRoll: [5, 4],
+    personality: {
+      aggression: 0.45,
+      harmony: 0.7,
+      expansion: 0.65,
+      curiosity: 0.7,
+    },
+    color: '#eab308', // Yellow
+    avatarId: null,
+    relationships: {
+      deity_player: 20,
+      deity_vulcanus: 15,
+      deity_sylvana: 25,
+      deity_morvath: -50,
+      deity_boreas: -60,
+    },
+    myth: 'Ascending with the first cosmic dawn, Solaria bathes Meglin in thermal warmth, dispersing ancient shadows and empowering solar-worshiping civilizations.',
+    historicalGoals: [
+      'Disperse eternal blizzards and frostbitten wastelands with glorious solar warmth',
+      'Erect grand golden citadels and monumental solar spires',
+      'Purge demonic cults and stygian abominations from the daylight realm',
+    ],
+    ethos: 'Radiant Dawn, Unflinching Honor, and Solar Splendor',
+  },
+  {
+    id: 'deity_boreas',
+    name: 'Boreas',
+    title: 'The Frost Patriarch',
+    domain: 'Glaciers & Winter Wastes',
+    symbol: '❄',
+    isPlayer: false,
+    power: 12,
+    thriftBonus: 0,
+    lastRoll: [3, 6],
+    personality: {
+      aggression: 0.55,
+      harmony: 0.3,
+      expansion: 0.6,
+      curiosity: 0.4,
+    },
+    color: '#93c5fd', // Ice Blue
+    avatarId: null,
+    relationships: {
+      deity_player: -5,
+      deity_solaria: -60,
+      deity_vulcanus: -20,
+      deity_thalassor: 20,
+    },
+    myth: 'From the frozen rim of the universe, Boreas brings the great hush of winter, freezing oceans into traversable ice shelves and preserving sacred artifacts in permafrost.',
+    historicalGoals: [
+      'Expand polar ice caps and chill equatorial monsoons into crisp subarctic winds',
+      'Guide hardy frost-born warriors to endure and conquer fragile southern kingdoms',
+      'Freeze cataclysms in perpetual stasis beneath glacial vaults',
+    ],
+    ethos: 'Unyielding Chill, Stoic Endurance, and Glacial Majesty',
+  },
+  {
+    id: 'deity_gorgoroth',
+    name: 'Gorgoroth',
+    title: 'The World-Breaker',
+    domain: 'Crags & Volcanic Ruin',
+    symbol: '⚒',
+    isPlayer: false,
+    power: 12,
+    thriftBonus: 0,
+    lastRoll: [6, 4],
+    personality: {
+      aggression: 0.9,
+      harmony: 0.05,
+      expansion: 0.85,
+      curiosity: 0.3,
+    },
+    color: '#b45309', // Dark Bronze / Magma
+    avatarId: null,
+    relationships: {
+      deity_player: -20,
+      deity_sylvana: -65,
+      deity_aurelia: -50,
+      deity_morvath: 30,
+    },
+    myth: 'Gorgoroth arose from the catastrophic collision of tectonic plates, wielding seismic hammers to shatter tranquil landscapes into jagged badlands and magma rifts.',
+    historicalGoals: [
+      'Split peaceful continents with impassable volcanic chasms and jagged fault lines',
+      'Champion monstrous behemoths and savage subterranean hordes',
+      'Level towering ivory cities with devastating earthquakes and volcanic fallout',
+    ],
+    ethos: 'Tectonic Fury, Raw Primordial Might, and Shattered Strata',
+  },
+  {
+    id: 'deity_elysia',
+    name: 'Elysia',
+    title: 'The Verdant Maiden',
+    domain: 'Flora & Gentle Rains',
+    symbol: '❧',
+    isPlayer: false,
+    power: 12,
+    thriftBonus: 0,
+    lastRoll: [4, 5],
+    personality: {
+      aggression: 0.1,
+      harmony: 0.95,
+      expansion: 0.4,
+      curiosity: 0.8,
+    },
+    color: '#34d399', // Mint / Emerald
+    avatarId: null,
+    relationships: {
+      deity_player: 35,
+      deity_sylvana: 45,
+      deity_gorgoroth: -70,
+      deity_morvath: -50,
+    },
+    myth: 'Wherever Elysia walks, petrified deserts bloom with fragrant blossoms and polluted marshes clarify into sacred crystalline springs.',
+    historicalGoals: [
+      'Heal scarred wastelands with enchanted flora and miraculous botanical gardens',
+      'Foster peaceful communes and scholastic sanctuaries free from war',
+      'Unite the diverse races in a tapestry of mutual benevolence',
+    ],
+    ethos: 'Unconditional Compassion, Botanical Wonder, and Everlasting Peace',
+  },
+  {
+    id: 'deity_zephyros',
+    name: 'Zephyros',
+    title: 'Lord of the Roaring Winds',
+    domain: 'Tempests & The Sky',
+    symbol: '⚡',
+    isPlayer: false,
+    power: 12,
+    thriftBonus: 0,
+    lastRoll: [5, 3],
+    personality: {
+      aggression: 0.5,
+      harmony: 0.5,
+      expansion: 0.7,
+      curiosity: 0.85,
+    },
+    color: '#0284c7', // Sky Azure
+    avatarId: null,
+    relationships: {
+      deity_player: 15,
+      deity_thalassor: 25,
+      deity_vulcanus: -15,
+    },
+    myth: 'Zephyros dances through the atmospheric currents, steering monsoon winds, trade currents, and sudden lightning squalls across the oceans.',
+    historicalGoals: [
+      'Bless maritime voyages and sky-faring vessels with favoring gale winds',
+      'Sculpt dynamic atmospheric vortexes that stir continents into motion',
+      'Confound stagnant empires with unpredictable squalls and sudden change',
+    ],
+    ethos: 'Boundless Freedom, Atmospheric Tempest, and Fleeting Wonder',
+  },
+  {
+    id: 'deity_nyxathor',
+    name: 'Nyxathor',
+    title: 'The Stygian Sovereign',
+    domain: 'Night & Astral Mysteries',
+    symbol: '☾',
+    isPlayer: false,
+    power: 12,
+    thriftBonus: 0,
+    lastRoll: [4, 4],
+    personality: {
+      aggression: 0.65,
+      harmony: 0.25,
+      expansion: 0.5,
+      curiosity: 0.9,
+    },
+    color: '#7c3aed', // Deep Violet
+    avatarId: null,
+    relationships: {
+      deity_player: 5,
+      deity_solaria: -55,
+      deity_xyrakis: 30,
+    },
+    myth: 'Dwelling within the starry canopy and obsidian voids, Nyxathor reveals hidden prophetic dreams to mortal visionaries while veiling sinister machinations.',
+    historicalGoals: [
+      'Veil celestial truths behind esoteric zodiac constellations',
+      'Inspire secretive night guilds, phantom assassins, and dream weavers',
+      'Erect obsidian observatories to commune with beyond-the-stars entities',
+    ],
+    ethos: 'Nocturnal Whispers, Astrological Fate, and Shadowed Sovereignty',
   },
 ];
+
+export interface DeityPair {
+  id: string;
+  name: string;
+  theme: string;
+  description: string;
+  deityIds: [string, string];
+}
+
+export const CANONICAL_DEITY_PAIRS: DeityPair[] = [
+  {
+    id: 'pair_forge_bloom',
+    name: 'Forge & Bloom',
+    theme: 'Subterranean Industry vs Primal Wilderness',
+    description: 'Vulcanus raises stone forges & iron veins while Sylvana retaliates with untamed primeval groves.',
+    deityIds: ['deity_vulcanus', 'deity_sylvana'],
+  },
+  {
+    id: 'pair_light_discord',
+    name: 'Radiance & Discord',
+    theme: 'Order & Law vs Ruthless Subversion',
+    description: 'Aurelia codifies marble empires and justice, while Morvath foments dark conspiracies and survival of the fittest.',
+    deityIds: ['deity_aurelia', 'deity_morvath'],
+  },
+  {
+    id: 'pair_ocean_arcana',
+    name: 'Tides & Arcana',
+    theme: 'Oceanic Depths vs Eldritch Leylines',
+    description: 'Thalassor commands monsoon tempests and reefs, while Xyrakis weaves forbidden dimensional secrets.',
+    deityIds: ['deity_thalassor', 'deity_xyrakis'],
+  },
+  {
+    id: 'pair_sun_frost',
+    name: 'Dawn & Glacial Frost',
+    theme: 'Solar Fire vs Polar Permafrost',
+    description: 'Solaria bathes continents in thermal light while Boreas locks the oceans in glacial ice packs.',
+    deityIds: ['deity_solaria', 'deity_boreas'],
+  },
+  {
+    id: 'pair_crags_night',
+    name: 'Cataclysm & Stygian Night',
+    theme: 'Tectonic Fracture vs Nocturnal Enigma',
+    description: 'Gorgoroth splits mountain roots with volcanic hammers while Nyxathor cloaks mortal minds in astral shadows.',
+    deityIds: ['deity_gorgoroth', 'deity_nyxathor'],
+  },
+  {
+    id: 'pair_verdant_tempest',
+    name: 'Verdancy & Tempests',
+    theme: 'Gentle Blossom vs Roaring Sky Gale',
+    description: 'Elysia nurtures fragile botanical meadows while Zephyros guides thunderheads across the horizon.',
+    deityIds: ['deity_elysia', 'deity_zephyros'],
+  },
+];
+
+const RANDOM_NAMES = [
+  'Valerius', 'Kaelen', 'Morrigan', 'Theron', 'Zarek', 'Isolde', 'Draxis', 'Althea',
+  'Orion', 'Vespera', 'Malakor', 'Astris', 'Rhiannon', 'Kazador', 'Yvaine', 'Balthazar'
+];
+
+const RANDOM_TITLES = [
+  'The Star-Weaver', 'The Ashen Sentinel', 'Keeper of the Tide', 'The Iron Sovereign',
+  'Voice of the Depths', 'The Silver Hand', 'Architect of Ruin', 'The Sun-Crowned',
+  'The Rune-Carver', 'Mistress of Whispers', 'The Thunder Caller', 'The Seed-Bearer'
+];
+
+const RANDOM_DOMAINS = [
+  'Runes & Smithcraft', 'Chrono-Currents & Fate', 'Abyssal Chasm & Leviathans',
+  'Wild beasts & Hunters', 'Solar Radiance & Fire', 'Crystalline Caves & Gems',
+  'Storms & Lightning', 'Shadows & Stealth', 'Fertility & Harvests', 'Blood & Warfare'
+];
+
+const RANDOM_SYMBOLS = ['✧', '⚒', '☼', '☠', '❧', '⚡', '🜂', '🜄', '☾', '👁', '⚜', '⚔', '❂', '✦', '❄', '♒'];
+const RANDOM_COLORS = [
+  '#f59e0b', '#10b981', '#ef4444', '#38bdf8', '#06b6d4', '#a855f7',
+  '#ec4899', '#84cc16', '#eab308', '#6366f1', '#14b8a6', '#f97316'
+];
+
+/**
+ * Generate a unique random NPC Deity for custom pantheons
+ */
+export function generateRandomDeity(existingIndex = 1): Deity {
+  const randName = RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
+  const randTitle = RANDOM_TITLES[Math.floor(Math.random() * RANDOM_TITLES.length)];
+  const randDomain = RANDOM_DOMAINS[Math.floor(Math.random() * RANDOM_DOMAINS.length)];
+  const randSymbol = RANDOM_SYMBOLS[Math.floor(Math.random() * RANDOM_SYMBOLS.length)];
+  const randColor = RANDOM_COLORS[Math.floor(Math.random() * RANDOM_COLORS.length)];
+
+  const aggression = Math.round((0.15 + Math.random() * 0.7) * 100) / 100;
+  const harmony = Math.round((0.15 + Math.random() * 0.7) * 100) / 100;
+  const expansion = Math.round((0.2 + Math.random() * 0.7) * 100) / 100;
+  const curiosity = Math.round((0.3 + Math.random() * 0.6) * 100) / 100;
+
+  return {
+    id: `deity_custom_${Date.now()}_${existingIndex}`,
+    name: randName,
+    title: randTitle,
+    domain: randDomain,
+    symbol: randSymbol,
+    isPlayer: false,
+    power: 12,
+    thriftBonus: 0,
+    lastRoll: [3, 4],
+    personality: {
+      aggression,
+      harmony,
+      expansion,
+      curiosity,
+    },
+    color: randColor,
+    avatarId: null,
+    relationships: {},
+    myth: `Conceived in the celestial ether, ${randName} embodies the divine principle of ${randDomain}. Drawing upon ancient currents, this deity seeks to sculpt the world according to their divine ethos.`,
+    ethos: `Sacred dominion over ${randDomain.toLowerCase()}, boundless curiosity, and legendary purpose.`,
+    historicalGoals: [
+      `Uplift mortal followers dedicated to the mysteries of ${randDomain}`,
+      `Shape land, climates, and realms that honor their divine lineage`,
+      `Forge alliances with like-minded deities while checking aggressive rivals`,
+    ],
+  };
+}
+
+export const INITIAL_DEITIES: Deity[] = [
+  {
+    id: 'deity_player',
+    name: 'Aethelgard',
+    title: 'The Prime Shaper',
+    domain: 'Creation & Will',
+    symbol: '✧',
+    isPlayer: true,
+    power: 12,
+    thriftBonus: 0,
+    lastRoll: [4, 4],
+    personality: {
+      aggression: 0.5,
+      harmony: 0.5,
+      expansion: 0.5,
+      curiosity: 0.8,
+    },
+    color: '#818cf8', // Indigo
+    avatarId: null,
+    relationships: {
+      deity_vulcanus: 15,
+      deity_sylvana: 25,
+      deity_morvath: -10,
+      deity_aurelia: 30,
+      deity_thalassor: 10,
+      deity_xyrakis: 0,
+    },
+    myth: 'First to awaken in the celestial expanse, Aethelgard perceives the latent potential within raw matter and calls forth continents, climates, and sentient species through pure divine will.',
+    historicalGoals: [
+      'Harmonize the raw planetary elements into a thriving, balanced world',
+      'Foster enlightened mortal civilizations capable of reaching the stars',
+      'Maintain the cosmic balance against cataclysmic extremes',
+    ],
+    ethos: 'Cosmic Genesis, Free Will, and Creative Transcendence',
+  },
+  ...CANDIDATE_NPC_DEITIES.slice(0, 4),
+];
+
+/**
+ * Build a customized pantheon for a new game with a custom player deity and N deities.
+ */
+export function buildCustomPantheon(
+  playerDeity: Deity,
+  totalDeityCount: number,
+  chosenNpcIds?: string[],
+  customNpcs?: Deity[]
+): Deity[] {
+  const allPool = [...CANDIDATE_NPC_DEITIES, ...(customNpcs || [])];
+  let selectedNpcs: Deity[] = [];
+  if (chosenNpcIds && chosenNpcIds.length > 0) {
+    selectedNpcs = allPool.filter((d) => chosenNpcIds.includes(d.id));
+  }
+
+  // If more are needed, fill up to totalDeityCount - 1 (since 1 is player)
+  const neededNpcs = Math.max(1, totalDeityCount - 1);
+  for (const candidate of allPool) {
+    if (selectedNpcs.length >= neededNpcs) break;
+    if (!selectedNpcs.find((d) => d.id === candidate.id)) {
+      selectedNpcs.push(candidate);
+    }
+  }
+
+  // Deep copy player deity and selected NPCs, ensuring relationships are mapped
+  const fullPantheon: Deity[] = [
+    { ...playerDeity, isPlayer: true },
+    ...selectedNpcs.map((npc) => ({
+      ...npc,
+      isPlayer: false,
+      power: 12,
+      thriftBonus: 0,
+      avatarId: null,
+      relationships: { ...npc.relationships, [playerDeity.id]: npc.relationships[playerDeity.id] || 0 },
+    })),
+  ];
+
+  return fullPantheon;
+}
 
 export interface NpcActionResult {
   updatedDeity: Deity;

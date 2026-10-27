@@ -22,11 +22,14 @@ import {
   TerritorialConflict,
   TradeRoute,
   WorldCell,
+  WorldStructureType,
+  SavedGameSlot,
 } from './types/game';
 import {
   DAWN_OF_WORLDS_COSTS,
   calculateRoundPower,
   calculateShapingCost,
+  calculateMultiCellCost,
   ShapingScope,
   AVAILABLE_TECHNOLOGIES,
   ActionPowerType,
@@ -37,8 +40,9 @@ import {
   applyTerrainModification,
   generateInitialWorld,
   getAdjacentCellIndices,
+  areCellsAdjacent,
 } from './simulation/worldGrid';
-import { INITIAL_DEITIES, executeNpcTurn } from './simulation/npcDeities';
+import { INITIAL_DEITIES, executeNpcTurn, buildCustomPantheon } from './simulation/npcDeities';
 import { applyMiracle } from './simulation/miracles';
 import {
   calculateTradeRoutes,
@@ -56,6 +60,8 @@ import { MiracleWeaverModal } from './components/MiracleWeaverModal';
 import { BattleModal } from './components/BattleModal';
 import { ChronicleDrawer } from './components/ChronicleDrawer';
 import { PantheonDrawer } from './components/PantheonDrawer';
+import { NewGameModal } from './components/NewGameModal';
+import { SaveLoadModal } from './components/SaveLoadModal';
 
 export default function App() {
   // World Grid & Entities State
@@ -97,14 +103,45 @@ export default function App() {
   ]);
 
   // UI Selection & Modals
-  const [selectedCellIndex, setSelectedCellIndex] = useState<number | null>(null);
+  const [selectedCellIndices, setSelectedCellIndices] = useState<number[]>([]);
+  const selectedCellIndex = selectedCellIndices[0] ?? null;
+  const selectedCell = selectedCellIndex !== null && cells[selectedCellIndex] ? cells[selectedCellIndex] : null;
+
+  const handleSelectCell = (cellIndex: number, isMultiSelect = false) => {
+    if (isMultiSelect) {
+      setSelectedCellIndices((prev) => {
+        if (prev.includes(cellIndex)) return prev;
+        if (prev.length === 0) return [cellIndex];
+        // Allow selection of adjacent (or diagonally adjacent) blocks
+        const isAdjacent = prev.some((existingIdx) => areCellsAdjacent(existingIdx, cellIndex));
+        if (isAdjacent) {
+          return [...prev, cellIndex];
+        }
+        return prev;
+      });
+    } else {
+      setSelectedCellIndices([cellIndex]);
+    }
+  };
+
+  const handleClearSelection = () => {
+    if (selectedCellIndices.length > 1) {
+      setSelectedCellIndices([selectedCellIndices[0]]);
+    } else {
+      setSelectedCellIndices([]);
+    }
+  };
+
   const [mapViewMode, setMapViewMode] = useState<MapViewMode>('physical');
   const [is3DMode, setIs3DMode] = useState<boolean>(true);
+  const [currentWorldStructure, setCurrentWorldStructure] = useState<WorldStructureType>('continental');
 
   const [isRaceModalOpen, setIsRaceModalOpen] = useState(false);
   const [isMiracleModalOpen, setIsMiracleModalOpen] = useState(false);
   const [isChronicleOpen, setIsChronicleOpen] = useState(false);
   const [isPantheonOpen, setIsPantheonOpen] = useState(false);
+  const [isNewGameModalOpen, setIsNewGameModalOpen] = useState(false);
+  const [isSaveLoadModalOpen, setIsSaveLoadModalOpen] = useState(false);
   const [activeBattleResult, setActiveBattleResult] = useState<BattleResult | null>(null);
 
   const playerDeity = deities.find((d) => d.isPlayer) || deities[0];
@@ -112,9 +149,6 @@ export default function App() {
   const activeDeity = deities.find((d) => d.id === activeDeityId) || playerDeity;
 
   const canAdvanceAge = round >= 5;
-
-  // Selected cell object
-  const selectedCell = selectedCellIndex !== null && cells[selectedCellIndex] ? cells[selectedCellIndex] : null;
 
   // Update dynamic geopolitical state (trade & friction) whenever cities or civs change
   useEffect(() => {
@@ -339,15 +373,43 @@ export default function App() {
   // Player Action: Cascading Shape Terrain
   const handleShapeTerrain = (terrain: TerrainType, scope: ShapingScope = 'cascade') => {
     const baseCost = DAWN_OF_WORLDS_COSTS.shape_land[currentAge];
-    const cost = calculateShapingCost(baseCost, scope);
-    if (playerDeity.power < cost) return;
+    const singleCost = calculateShapingCost(baseCost, scope);
+    const targetIndices = selectedCellIndices.length > 0
+      ? selectedCellIndices
+      : [selectedCellIndex !== null ? selectedCellIndex : Math.floor(cells.length / 2)];
 
-    const targetIdx = selectedCellIndex !== null ? selectedCellIndex : Math.floor(cells.length / 2);
-    const { updatedCells, summary } = applyCascadingTerrainModification(cells, targetIdx, terrain, scope);
-    setCells(updatedCells);
-    deductPlayerPower(cost);
+    const totalCost = calculateMultiCellCost(singleCost, targetIndices.length);
+    if (playerDeity.power < totalCost) return;
 
-    const targetCell = cells[targetIdx];
+    let updated = [...cells];
+    let totalAffected = 0;
+    let volcanoCount = 0;
+    let mountainCount = 0;
+    let hillsCount = 0;
+    let plainsCount = 0;
+    let forestCount = 0;
+    let swampCount = 0;
+    let shallowsCount = 0;
+    let oceanCount = 0;
+
+    for (const idx of targetIndices) {
+      const res = applyCascadingTerrainModification(updated, idx, terrain, scope);
+      updated = res.updatedCells;
+      totalAffected += res.summary.totalAffected;
+      volcanoCount += res.summary.volcanoCount;
+      mountainCount += res.summary.mountainCount;
+      hillsCount += res.summary.hillsCount;
+      plainsCount += res.summary.plainsCount;
+      forestCount += res.summary.forestCount;
+      swampCount += res.summary.swampCount;
+      shallowsCount += res.summary.shallowsCount;
+      oceanCount += res.summary.oceanCount;
+    }
+
+    setCells(updated);
+    deductPlayerPower(totalCost);
+
+    const firstCell = cells[targetIndices[0]];
     const log: HistoryLogEntry = {
       id: `shape_${Date.now()}`,
       age: currentAge,
@@ -357,10 +419,10 @@ export default function App() {
       deityName: playerDeity.name,
       deityColor: playerDeity.color,
       actionType: 'Shape Land',
-      cost,
-      title: `${playerDeity.name} Cascaded ${terrain.replace('_', ' ')} (${scope.toUpperCase()})`,
-      description: summary.logNarrative,
-      impact: `Transformed ${summary.totalAffected} zones at [${targetCell.lat.toFixed(0)}°, ${targetCell.lon.toFixed(0)}°] (${summary.volcanoCount ? `${summary.volcanoCount} volcano, ` : ''}${summary.mountainCount ? `${summary.mountainCount} mountains, ` : ''}${summary.hillsCount ? `${summary.hillsCount} hills, ` : ''}${summary.plainsCount ? `${summary.plainsCount} plains, ` : ''}${summary.forestCount ? `${summary.forestCount} forests, ` : ''}${summary.swampCount ? `${summary.swampCount} swamps, ` : ''}${summary.shallowsCount ? `${summary.shallowsCount} coastal shallows` : ''}).`,
+      cost: totalCost,
+      title: `${playerDeity.name} Cascaded ${terrain.replace('_', ' ')}${targetIndices.length > 1 ? ` across ${targetIndices.length} blocks` : ''} (${scope.toUpperCase()})`,
+      description: `Wove divine will across ${targetIndices.length} adjacent block${targetIndices.length > 1 ? 's' : ''} (${scope} scope).`,
+      impact: `Transformed ${totalAffected} zones around [${firstCell.lat.toFixed(0)}°, ${firstCell.lon.toFixed(0)}°] (${volcanoCount ? `${volcanoCount} volcano, ` : ''}${mountainCount ? `${mountainCount} mountains, ` : ''}${hillsCount ? `${hillsCount} hills, ` : ''}${plainsCount ? `${plainsCount} plains, ` : ''}${forestCount ? `${forestCount} forests, ` : ''}${swampCount ? `${swampCount} swamps, ` : ''}${shallowsCount ? `${shallowsCount} coastal shallows` : ''}).`,
       category: 'creation',
     };
     setHistory((prev) => [log, ...prev]);
@@ -369,15 +431,26 @@ export default function App() {
   // Player Action: Cascading Shape Climate
   const handleShapeClimate = (climate: ClimateType, scope: ShapingScope = 'cascade') => {
     const baseCost = DAWN_OF_WORLDS_COSTS.shape_climate[currentAge];
-    const cost = calculateShapingCost(baseCost, scope);
-    if (playerDeity.power < cost) return;
+    const singleCost = calculateShapingCost(baseCost, scope);
+    const targetIndices = selectedCellIndices.length > 0
+      ? selectedCellIndices
+      : [selectedCellIndex !== null ? selectedCellIndex : Math.floor(cells.length / 2)];
 
-    const targetIdx = selectedCellIndex !== null ? selectedCellIndex : Math.floor(cells.length / 2);
-    const { updatedCells, summary } = applyCascadingClimateModification(cells, targetIdx, climate, scope);
-    setCells(updatedCells);
-    deductPlayerPower(cost);
+    const totalCost = calculateMultiCellCost(singleCost, targetIndices.length);
+    if (playerDeity.power < totalCost) return;
 
-    const targetCell = cells[targetIdx];
+    let updated = [...cells];
+    let lastSummary = '';
+    for (const idx of targetIndices) {
+      const res = applyCascadingClimateModification(updated, idx, climate, scope);
+      updated = res.updatedCells;
+      lastSummary = res.summary;
+    }
+
+    setCells(updated);
+    deductPlayerPower(totalCost);
+
+    const firstCell = cells[targetIndices[0]];
     const log: HistoryLogEntry = {
       id: `climate_${Date.now()}`,
       age: currentAge,
@@ -387,10 +460,10 @@ export default function App() {
       deityName: playerDeity.name,
       deityColor: playerDeity.color,
       actionType: 'Shape Climate',
-      cost,
-      title: `${playerDeity.name} Channeled ${climate.toUpperCase()} Skies (${scope.toUpperCase()})`,
-      description: summary,
-      impact: `Shifted regional climate and moisture around [${targetCell.lat.toFixed(0)}°, ${targetCell.lon.toFixed(0)}°].`,
+      cost: totalCost,
+      title: `${playerDeity.name} Channeled ${climate.toUpperCase()} Skies${targetIndices.length > 1 ? ` across ${targetIndices.length} blocks` : ''} (${scope.toUpperCase()})`,
+      description: lastSummary,
+      impact: `Shifted regional climate and moisture across ${targetIndices.length} zones around [${firstCell.lat.toFixed(0)}°, ${firstCell.lon.toFixed(0)}°].`,
       category: 'creation',
     };
     setHistory((prev) => [log, ...prev]);
@@ -797,6 +870,144 @@ export default function App() {
     );
   };
 
+  const handleBestowTribute = (targetDeityId: string) => {
+    if (playerDeity.power < 2) return;
+    deductPlayerPower(2);
+    setDeities((prev) =>
+      prev.map((d) => {
+        if (d.id === targetDeityId) {
+          const current = d.relationships[playerDeity.id] || 0;
+          return {
+            ...d,
+            power: d.power + 2,
+            relationships: {
+              ...d.relationships,
+              [playerDeity.id]: Math.min(100, current + 30),
+            },
+          };
+        }
+        return d;
+      })
+    );
+
+    const targetDeity = deities.find((d) => d.id === targetDeityId);
+    setHistory((prev) => [
+      {
+        id: `tribute_${Date.now()}`,
+        age: currentAge,
+        round,
+        year,
+        deityId: playerDeity.id,
+        deityName: playerDeity.name,
+        deityColor: playerDeity.color,
+        actionType: 'Divine Tribute',
+        cost: 2,
+        title: `${playerDeity.name} Bestowed Tribute to ${targetDeity?.name || 'Rival'}`,
+        description: `Offered sacred celestial power points as tribute, substantially warming relations (+30).`,
+        impact: `Relations improved; ${targetDeity?.name} received +2 divine power.`,
+        category: 'creation',
+      },
+      ...prev,
+    ]);
+  };
+
+  // Start New Game Handler
+  const handleStartNewGame = ({
+    worldStructure,
+    playerDeity: newPlayerDeity,
+    totalDeityCount,
+    selectedNpcIds,
+    customNpcs,
+  }: {
+    worldStructure: WorldStructureType;
+    playerDeity: Deity;
+    totalDeityCount: number;
+    selectedNpcIds: string[];
+    customNpcs?: Deity[];
+  }) => {
+    const newCells = generateInitialWorld(worldStructure);
+    const newPantheon = buildCustomPantheon(newPlayerDeity, totalDeityCount, selectedNpcIds, customNpcs);
+    const newTurnOrder = newPantheon.map((d) => d.id);
+
+    setCurrentWorldStructure(worldStructure);
+    setCells(newCells);
+    setDeities(newPantheon);
+    setTurnOrder(newTurnOrder);
+    setActiveDeityIndex(0);
+    setCities([]);
+    setCivilizations([]);
+    setRaces([]);
+    setArmies([]);
+    setAvatars([]);
+    setOrders([]);
+    setTradeRoutes([]);
+    setConflicts([]);
+    setCurrentAge('1st_age_land');
+    setRound(1);
+    setYear(500);
+    setSelectedCellIndices([]);
+
+    setHistory([
+      {
+        id: `init_${Date.now()}`,
+        age: '1st_age_land',
+        round: 1,
+        year: 500,
+        deityId: newPlayerDeity.id,
+        deityName: newPlayerDeity.name,
+        deityColor: newPlayerDeity.color,
+        actionType: 'Cosmic Genesis',
+        cost: 0,
+        title: `The Cosmic Genesis of ${newPlayerDeity.name}`,
+        description: `${newPlayerDeity.name} awoke in the celestial void alongside a council of ${totalDeityCount - 1} immortal rivals to sculpt a ${worldStructure} world.`,
+        impact: 'The First Age of Land commenced.',
+        category: 'creation',
+      },
+    ]);
+  };
+
+  // Load Game Handler
+  const handleLoadGame = (slot: SavedGameSlot) => {
+    setCells(slot.cells);
+    setCities(slot.cities || []);
+    setCivilizations(slot.civilizations || []);
+    setRaces(slot.races || []);
+    setArmies(slot.armies || []);
+    setAvatars(slot.avatars || []);
+    setOrders(slot.orders || []);
+    setTradeRoutes(slot.tradeRoutes || []);
+    setConflicts(slot.conflicts || []);
+    setDeities(slot.deities);
+    setTurnOrder(slot.turnOrder);
+    setActiveDeityIndex(slot.activeDeityIndex);
+    setCurrentAge(slot.age);
+    setRound(slot.round);
+    setYear(slot.year);
+    setHistory(slot.history || []);
+    if (slot.worldStructure) setCurrentWorldStructure(slot.worldStructure);
+    if (slot.mapViewMode) setMapViewMode(slot.mapViewMode);
+    if (typeof slot.is3DMode === 'boolean') setIs3DMode(slot.is3DMode);
+
+    setHistory((prev) => [
+      {
+        id: `load_${Date.now()}`,
+        age: slot.age,
+        round: slot.round,
+        year: slot.year,
+        deityId: slot.playerDeityName,
+        deityName: slot.playerDeityName,
+        deityColor: '#fbbf24',
+        actionType: 'Chronicle Restored',
+        cost: 0,
+        title: `Archive Loaded: ${slot.saveName}`,
+        description: `World memories restored from save dated ${slot.saveDateFormatted}.`,
+        impact: `Returned to Round ${slot.round}, Year ${slot.year}.`,
+        category: 'creation',
+      },
+      ...prev,
+    ]);
+  };
+
   return (
     <div className="relative w-screen h-screen overflow-hidden flex flex-col bg-black text-slate-100 select-none font-sans">
       {/* Top Status Bar */}
@@ -806,6 +1017,7 @@ export default function App() {
         year={year}
         activeDeity={activeDeity}
         playerDeity={playerDeity}
+        deityCount={deities.length}
         mapViewMode={mapViewMode}
         onSelectMapViewMode={setMapViewMode}
         is3DMode={is3DMode}
@@ -815,6 +1027,8 @@ export default function App() {
         onAdvanceAge={handleAdvanceAge}
         onOpenChronicle={() => setIsChronicleOpen(true)}
         onOpenPantheon={() => setIsPantheonOpen(true)}
+        onOpenNewGame={() => setIsNewGameModalOpen(true)}
+        onOpenSaveLoad={() => setIsSaveLoadModalOpen(true)}
       />
 
       {/* Main World Viewport: Interactive 3D Globe or 2D Tabletop Atlas */}
@@ -829,7 +1043,9 @@ export default function App() {
             tradeRoutes={tradeRoutes}
             conflicts={conflicts}
             selectedCellIndex={selectedCellIndex}
-            onSelectCell={setSelectedCellIndex}
+            selectedCellIndices={selectedCellIndices}
+            onSelectCell={handleSelectCell}
+            onClearSelection={handleClearSelection}
             viewMode={mapViewMode}
           />
         ) : (
@@ -838,16 +1054,20 @@ export default function App() {
             cities={cities}
             civilizations={civilizations}
             selectedCellIndex={selectedCellIndex}
-            onSelectCell={setSelectedCellIndex}
+            selectedCellIndices={selectedCellIndices}
+            onSelectCell={handleSelectCell}
+            onClearSelection={handleClearSelection}
             viewMode={mapViewMode}
           />
         )}
 
-        {/* Collapsible Bottom Control Dock */}
+        {/* Collapsible Divine Powers Drawer */}
         <ControlDock
           currentAge={currentAge}
           playerPower={playerDeity.power}
           selectedCell={selectedCell}
+          selectedCellIndices={selectedCellIndices}
+          onClearSelection={handleClearSelection}
           onOpenRaceSynthesizer={() => setIsRaceModalOpen(true)}
           onOpenMiracleWeaver={() => setIsMiracleModalOpen(true)}
           onShapeTerrain={handleShapeTerrain}
@@ -857,6 +1077,42 @@ export default function App() {
       </main>
 
       {/* Modals & Drawers */}
+      <NewGameModal
+        isOpen={isNewGameModalOpen}
+        onClose={() => setIsNewGameModalOpen(false)}
+        onStartNewGame={handleStartNewGame}
+      />
+
+      <SaveLoadModal
+        isOpen={isSaveLoadModalOpen}
+        onClose={() => setIsSaveLoadModalOpen(false)}
+        currentGameState={{
+          age: currentAge,
+          round,
+          year,
+          playerDeityName: playerDeity.name,
+          playerDeityTitle: playerDeity.title,
+          deityCount: deities.length,
+          worldStructure: currentWorldStructure,
+          cells,
+          cities,
+          civilizations,
+          races,
+          armies,
+          avatars,
+          orders,
+          tradeRoutes,
+          conflicts,
+          deities,
+          turnOrder,
+          activeDeityIndex,
+          history,
+          mapViewMode,
+          is3DMode,
+        }}
+        onLoadGame={handleLoadGame}
+      />
+
       <RaceGeneratorModal
         isOpen={isRaceModalOpen}
         onClose={() => setIsRaceModalOpen(false)}
@@ -896,6 +1152,7 @@ export default function App() {
         playerDeity={playerDeity}
         onOfferPact={handleOfferPact}
         onProvokeRival={handleProvokeRival}
+        onBestowTribute={handleBestowTribute}
       />
     </div>
   );

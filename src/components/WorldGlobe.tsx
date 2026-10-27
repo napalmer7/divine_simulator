@@ -6,8 +6,23 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { Army, Avatar, City, Civilization, MapViewMode, TerritorialConflict, TradeRoute, WorldCell } from '../types/game';
-import { GRID_COLS, GRID_ROWS, latLonToVector3, cellIndexToVector3 } from '../simulation/worldGrid';
+import {
+  Army,
+  Avatar,
+  City,
+  Civilization,
+  MapViewMode,
+  TerritorialConflict,
+  TradeRoute,
+  WorldCell,
+} from '../types/game';
+import {
+  GRID_COLS,
+  GRID_ROWS,
+  latLonToVector3,
+  cellIndexToVector3,
+} from '../simulation/worldGrid';
+import { Pause, Play, Layers } from 'lucide-react';
 
 interface WorldGlobeProps {
   cells: WorldCell[];
@@ -18,7 +33,9 @@ interface WorldGlobeProps {
   tradeRoutes: TradeRoute[];
   conflicts: TerritorialConflict[];
   selectedCellIndex: number | null;
-  onSelectCell: (cellIndex: number) => void;
+  selectedCellIndices?: number[];
+  onSelectCell: (cellIndex: number, isMultiSelect?: boolean) => void;
+  onClearSelection?: () => void;
   onHoverCell?: (cellIndex: number | null) => void;
   viewMode: MapViewMode;
 }
@@ -30,6 +47,110 @@ const _vecA = new THREE.Vector3();
 const _vecB = new THREE.Vector3();
 const _vecMid = new THREE.Vector3();
 
+/**
+ * Calculate exact 3D spherical position from UV coordinate
+ */
+function getPointOnSphere(u: number, v: number, radius: number): THREE.Vector3 {
+  const phi = v * Math.PI; // 0 at North Pole, PI at South Pole
+  const theta = u * 2 * Math.PI; // 0 to 2*PI around equator
+  const x = -(radius * Math.sin(phi) * Math.cos(theta));
+  const z = radius * Math.sin(phi) * Math.sin(theta);
+  const y = radius * Math.cos(phi);
+  return new THREE.Vector3(x, y, z);
+}
+
+/**
+ * Creates curved spherical quad surface mesh geometry matching the exact cell's boundaries on the globe
+ */
+function createCellSegmentGeometry(cellIndex: number, radius: number): THREE.BufferGeometry {
+  const r = Math.floor(cellIndex / GRID_COLS);
+  const c = cellIndex % GRID_COLS;
+  const segments = 4; // 4x4 subdivision curves seamlessly to the sphere surface
+
+  const uMin = c / GRID_COLS;
+  const uMax = (c + 1) / GRID_COLS;
+  const vMin = r / GRID_ROWS;
+  const vMax = (r + 1) / GRID_ROWS;
+
+  const positions: number[] = [];
+  const indices: number[] = [];
+
+  for (let i = 0; i <= segments; i++) {
+    const v = vMin + (vMax - vMin) * (i / segments);
+    const phi = v * Math.PI;
+
+    for (let j = 0; j <= segments; j++) {
+      const u = uMin + (uMax - uMin) * (j / segments);
+      const theta = u * 2 * Math.PI;
+
+      const x = -(radius * Math.sin(phi) * Math.cos(theta));
+      const z = radius * Math.sin(phi) * Math.sin(theta);
+      const y = radius * Math.cos(phi);
+
+      positions.push(x, y, z);
+    }
+  }
+
+  const stride = segments + 1;
+  for (let i = 0; i < segments; i++) {
+    for (let j = 0; j < segments; j++) {
+      const a = i * stride + j;
+      const b = (i + 1) * stride + j;
+      const cIdx = (i + 1) * stride + (j + 1);
+      const d = i * stride + (j + 1);
+
+      // Two triangles per quad
+      indices.push(a, b, d);
+      indices.push(b, cIdx, d);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/**
+ * Creates curved spherical perimeter line loop geometry matching the exact borders of the world segment
+ */
+function createCellOutlineGeometry(cellIndex: number, radius: number): THREE.BufferGeometry {
+  const r = Math.floor(cellIndex / GRID_COLS);
+  const c = cellIndex % GRID_COLS;
+  const segments = 4;
+
+  const uMin = c / GRID_COLS;
+  const uMax = (c + 1) / GRID_COLS;
+  const vMin = r / GRID_ROWS;
+  const vMax = (r + 1) / GRID_ROWS;
+
+  const points: THREE.Vector3[] = [];
+
+  // Top edge (West to East)
+  for (let j = 0; j <= segments; j++) {
+    const u = uMin + (uMax - uMin) * (j / segments);
+    points.push(getPointOnSphere(u, vMin, radius));
+  }
+  // Right edge (North to South)
+  for (let i = 1; i <= segments; i++) {
+    const v = vMin + (vMax - vMin) * (i / segments);
+    points.push(getPointOnSphere(uMax, v, radius));
+  }
+  // Bottom edge (East to West)
+  for (let j = segments - 1; j >= 0; j--) {
+    const u = uMin + (uMax - uMin) * (j / segments);
+    points.push(getPointOnSphere(u, vMax, radius));
+  }
+  // Left edge (South to North)
+  for (let i = segments - 1; i >= 0; i--) {
+    const v = vMin + (vMax - vMin) * (i / segments);
+    points.push(getPointOnSphere(uMin, v, radius));
+  }
+
+  return new THREE.BufferGeometry().setFromPoints(points);
+}
+
 export const WorldGlobe: React.FC<WorldGlobeProps> = ({
   cells,
   cities,
@@ -39,7 +160,9 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
   tradeRoutes,
   conflicts,
   selectedCellIndex,
+  selectedCellIndices = [],
   onSelectCell,
+  onClearSelection,
   onHoverCell,
   viewMode,
 }) => {
@@ -51,10 +174,41 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
   const globeMeshRef = useRef<THREE.Mesh | null>(null);
   const dynamicTextureRef = useRef<THREE.CanvasTexture | null>(null);
   const markersGroupRef = useRef<THREE.Group | null>(null);
+
+  // Exact segment shape meshes and outlines (child of globeMesh for 100% lockstep alignment)
   const selectionMarkerRef = useRef<THREE.Group | null>(null);
+  const selMeshMatRef = useRef<THREE.MeshBasicMaterial | null>(null);
+  const selLineMatRef = useRef<THREE.LineBasicMaterial | null>(null);
+
   const hoverMarkerRef = useRef<THREE.Group | null>(null);
+  const hoverMeshRef = useRef<THREE.Mesh | null>(null);
+  const hoverLineRef = useRef<THREE.Line | null>(null);
+
   const tradeArcsGroupRef = useRef<THREE.Group | null>(null);
   const pointerDownPos = useRef<{ x: number; y: number } | null>(null);
+
+  // Rotation pause state
+  const [isRotationPaused, setIsRotationPaused] = useState(false);
+  const isRotationPausedRef = useRef(false);
+
+  // Drag selection mode state
+  const [isDragSelectMode, setIsDragSelectMode] = useState(false);
+  const isDragSelectingRef = useRef(false);
+  const lastDragSelectedCellIdx = useRef<number | null>(null);
+
+  useEffect(() => {
+    isRotationPausedRef.current = isRotationPaused;
+  }, [isRotationPaused]);
+
+  // Active selection indices
+  const effectiveSelection = selectedCellIndices.length > 0
+    ? selectedCellIndices
+    : (selectedCellIndex !== null ? [selectedCellIndex] : []);
+
+  // Extra cost for multi-block selection
+  const extraCost = effectiveSelection.length >= 2
+    ? 1 + (effectiveSelection.length - 2) * 2
+    : 0;
 
   const [hoveredInfo, setHoveredInfo] = useState<{
     cell: WorldCell;
@@ -157,11 +311,16 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
         }
 
         // Render resource glimmer
-        if (cell.resource && cell.elevation > 0 && viewMode === 'physical') {
+        if (cell.resource && cell.elevation > 0 && (viewMode === 'physical' || viewMode === 'resources')) {
           ctx.fillStyle = '#fef08a';
           ctx.beginPath();
-          ctx.arc(x + cellW / 2, y + cellH / 2, 2, 0, Math.PI * 2);
+          ctx.arc(x + cellW / 2, y + cellH / 2, viewMode === 'resources' ? 3.5 : 2.5, 0, Math.PI * 2);
           ctx.fill();
+          if (viewMode === 'resources') {
+            ctx.strokeStyle = '#fbbf24';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+          }
         }
       }
     }
@@ -273,65 +432,55 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
     globeMesh.add(tradeArcsGroup);
     tradeArcsGroupRef.current = tradeArcsGroup;
 
-    // Selection Indicator Group (child of globeMesh for 100% accurate alignment)
+    // 1. Selection Indicator Group: Exact World Segment Quad Highlight (supports multi-block highlights)
     const selGroup = new THREE.Group();
     selGroup.visible = false;
 
-    // 1. Highlight circular disc on the cell
-    const discGeo = new THREE.CircleGeometry(0.18, 32);
-    const discMat = new THREE.MeshBasicMaterial({
+    selMeshMatRef.current = new THREE.MeshBasicMaterial({
       color: 0xf59e0b,
       transparent: true,
-      opacity: 0.35,
+      opacity: 0.45,
       side: THREE.DoubleSide,
       depthWrite: false,
     });
-    const disc = new THREE.Mesh(discGeo, discMat);
-    selGroup.add(disc);
 
-    // 2. Outer golden ring
-    const ringGeo = new THREE.RingGeometry(0.16, 0.22, 32);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: 0xfbbf24,
-      side: THREE.DoubleSide,
+    selLineMatRef.current = new THREE.LineBasicMaterial({
+      color: 0xfffbeb,
       transparent: true,
       opacity: 0.95,
       depthWrite: false,
     });
-    const selRing = new THREE.Mesh(ringGeo, ringMat);
-    selGroup.add(selRing);
-
-    // 3. Four corner ticks / celestial reticle brackets
-    const tickGeo = new THREE.PlaneGeometry(0.04, 0.08);
-    const tickMat = new THREE.MeshBasicMaterial({
-      color: 0xfffbeb,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
-    for (let i = 0; i < 4; i++) {
-      const tick = new THREE.Mesh(tickGeo, tickMat);
-      const angle = (i * Math.PI) / 2;
-      tick.position.set(Math.cos(angle) * 0.23, Math.sin(angle) * 0.23, 0.002);
-      tick.rotation.z = angle + Math.PI / 2;
-      selGroup.add(tick);
-    }
 
     globeMesh.add(selGroup);
     selectionMarkerRef.current = selGroup;
 
-    // Hover Indicator Group (subtle cyan reticle)
+    // 2. Hover Indicator Group: Exact World Segment Quad Highlight
     const hoverGroup = new THREE.Group();
     hoverGroup.visible = false;
-    const hoverRingGeo = new THREE.RingGeometry(0.15, 0.19, 32);
-    const hoverRingMat = new THREE.MeshBasicMaterial({
+
+    const initialHoverGeo = createCellSegmentGeometry(0, GLOBE_RADIUS + 0.006);
+    const hoverMeshMat = new THREE.MeshBasicMaterial({
       color: 0x38bdf8,
-      side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.65,
+      opacity: 0.32,
+      side: THREE.DoubleSide,
       depthWrite: false,
     });
-    const hoverRing = new THREE.Mesh(hoverRingGeo, hoverRingMat);
-    hoverGroup.add(hoverRing);
+    const hoverMesh = new THREE.Mesh(initialHoverGeo, hoverMeshMat);
+    hoverGroup.add(hoverMesh);
+    hoverMeshRef.current = hoverMesh;
+
+    const initialHoverLineGeo = createCellOutlineGeometry(0, GLOBE_RADIUS + 0.008);
+    const hoverLineMat = new THREE.LineBasicMaterial({
+      color: 0x7dd3fc,
+      transparent: true,
+      opacity: 0.85,
+      depthWrite: false,
+    });
+    const hoverLine = new THREE.Line(initialHoverLineGeo, hoverLineMat);
+    hoverGroup.add(hoverLine);
+    hoverLineRef.current = hoverLine;
+
     globeMesh.add(hoverGroup);
     hoverMarkerRef.current = hoverGroup;
 
@@ -368,19 +517,14 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
 
     // Animation Loop
     let animId = 0;
-    const clock = new THREE.Clock();
 
     const tick = () => {
-      const delta = clock.getDelta();
       controls.update();
 
-      // Gentle subtle rotation when not actively dragging
-      if (!isInteracting && viewMode === 'physical') {
+      // Rotate globe automatically when not interacting, not paused, and in physical mode
+      if (!isInteracting && !isRotationPausedRef.current && viewMode === 'physical') {
         globeMesh.rotation.y += 0.0006;
         atmoMesh.rotation.y += 0.0006;
-        if (selGroup.visible) {
-          selGroup.rotation.z += delta * 0.8;
-        }
       }
 
       renderer.render(scene, camera);
@@ -434,93 +578,107 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
       cityGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
 
       const civ = civilizations.find((c) => c.id === city.civilizationId);
-      const colorHex = civ ? civ.color : '#e2e8f0';
+      const cityColor = civ ? civ.color : '#e2e8f0';
 
-      // Keep Base Cylinder
-      const baseGeo = new THREE.CylinderGeometry(0.06, 0.08, 0.06, 6);
+      // Keep Base
+      const baseGeo = new THREE.CylinderGeometry(0.06, 0.08, 0.08, 6);
       const baseMat = new THREE.MeshStandardMaterial({
-        color: 0x475569,
-        roughness: 0.8,
+        color: cityColor,
+        roughness: 0.4,
         metalness: 0.2,
       });
-      const base = new THREE.Mesh(baseGeo, baseMat);
-      base.position.y = 0.03;
-      cityGroup.add(base);
+      const baseMesh = new THREE.Mesh(baseGeo, baseMat);
+      baseMesh.position.y = 0.04;
+      cityGroup.add(baseMesh);
 
-      // Citadel Spire
-      const spireGeo = new THREE.ConeGeometry(0.045, 0.12, 6);
+      // Spire Tower
+      const spireGeo = new THREE.ConeGeometry(0.04, 0.12, 6);
       const spireMat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(colorHex),
-        metalness: 0.4,
-        roughness: 0.4,
+        color: 0xfef08a,
+        roughness: 0.2,
+        metalness: 0.8,
       });
-      const spire = new THREE.Mesh(spireGeo, spireMat);
-      spire.position.y = 0.09;
-      cityGroup.add(spire);
+      const spireMesh = new THREE.Mesh(spireGeo, spireMat);
+      spireMesh.position.y = 0.14;
+      cityGroup.add(spireMesh);
 
-      // Beacon Light
-      const beaconGeo = new THREE.SphereGeometry(0.02, 8, 8);
-      const beaconMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
-      const beacon = new THREE.Mesh(beaconGeo, beaconMat);
-      beacon.position.y = 0.16;
-      cityGroup.add(beacon);
+      // Golden Beacon Ring for capital / major city
+      if (civ?.capitalCityId === city.id) {
+        const ringGeo = new THREE.TorusGeometry(0.1, 0.012, 8, 16);
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.rotation.x = Math.PI / 2;
+        ring.position.y = 0.02;
+        cityGroup.add(ring);
+      }
 
       group.add(cityGroup);
     });
 
-    // 2. Render Avatars (celestial glowing beacons)
-    avatars.forEach((avatar) => {
-      if (!avatar.isAlive) return;
+    // 2. Render Avatars (Divine manifestations)
+    avatars.filter((a) => a.isAlive).forEach((avatar) => {
       const [x, y, z] = latLonToVector3(avatar.lat, avatar.lon, GLOBE_RADIUS + 0.04);
       const normal = new THREE.Vector3(x, y, z).normalize();
 
-      const avGroup = new THREE.Group();
-      avGroup.position.set(x, y, z);
-      avGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
+      const avatarGroup = new THREE.Group();
+      avatarGroup.position.set(x, y, z);
+      avatarGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
 
-      const flameGeo = new THREE.OctahedronGeometry(0.08, 0);
-      const flameMat = new THREE.MeshBasicMaterial({
-        color: 0xf59e0b,
-        wireframe: true,
+      const orbGeo = new THREE.SphereGeometry(0.07, 16, 16);
+      const orbMat = new THREE.MeshStandardMaterial({
+        color: 0xfbbf24,
+        emissive: 0xf59e0b,
+        emissiveIntensity: 0.8,
+        roughness: 0.1,
       });
-      const flame = new THREE.Mesh(flameGeo, flameMat);
-      flame.position.y = 0.08;
-      avGroup.add(flame);
+      const orbMesh = new THREE.Mesh(orbGeo, orbMat);
+      orbMesh.position.y = 0.12;
+      avatarGroup.add(orbMesh);
 
-      const coreGeo = new THREE.SphereGeometry(0.035, 8, 8);
-      const coreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      const core = new THREE.Mesh(coreGeo, coreMat);
-      core.position.y = 0.08;
-      avGroup.add(core);
+      // Halo ring around Avatar
+      const haloGeo = new THREE.RingGeometry(0.11, 0.13, 16);
+      const haloMat = new THREE.MeshBasicMaterial({
+        color: 0xfffbeb,
+        side: THREE.DoubleSide,
+      });
+      const haloMesh = new THREE.Mesh(haloGeo, haloMat);
+      haloMesh.rotation.x = Math.PI / 2;
+      haloMesh.position.y = 0.12;
+      avatarGroup.add(haloMesh);
 
-      group.add(avGroup);
+      group.add(avatarGroup);
     });
 
-    // 3. Render Armies (marching banners)
+    // 3. Render Armies (Marching Banners)
     armies.forEach((army) => {
-      const [x, y, z] = latLonToVector3(army.lat, army.lon, GLOBE_RADIUS + 0.03);
+      const [x, y, z] = latLonToVector3(army.lat, army.lon, GLOBE_RADIUS + 0.02);
       const normal = new THREE.Vector3(x, y, z).normalize();
 
       const armyGroup = new THREE.Group();
       armyGroup.position.set(x, y, z);
       armyGroup.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), normal);
 
-      const bannerGeo = new THREE.BoxGeometry(0.04, 0.08, 0.01);
       const civ = civilizations.find((c) => c.id === army.civilizationId);
-      const bannerMat = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(civ?.color || '#ef4444'),
-        roughness: 0.4,
-      });
-      const banner = new THREE.Mesh(bannerGeo, bannerMat);
-      banner.position.y = 0.05;
-      armyGroup.add(banner);
+      const armyColor = civ ? civ.color : '#dc2626';
+
+      const staffGeo = new THREE.CylinderGeometry(0.01, 0.01, 0.14, 4);
+      const staffMat = new THREE.MeshBasicMaterial({ color: 0x78716c });
+      const staff = new THREE.Mesh(staffGeo, staffMat);
+      staff.position.y = 0.07;
+      armyGroup.add(staff);
+
+      const pennantGeo = new THREE.BoxGeometry(0.06, 0.04, 0.01);
+      const pennantMat = new THREE.MeshBasicMaterial({ color: armyColor });
+      const pennant = new THREE.Mesh(pennantGeo, pennantMat);
+      pennant.position.set(0.035, 0.11, 0);
+      armyGroup.add(pennant);
 
       group.add(armyGroup);
     });
 
-    // 4. Render Territorial Conflicts (Crossed Flaming Points)
+    // 4. Render Territorial Conflicts (Crossed Sword beacons)
     conflicts.forEach((conflict) => {
-      const [x, y, z] = latLonToVector3(conflict.lat, conflict.lon, GLOBE_RADIUS + 0.05);
+      const [x, y, z] = cellIndexToVector3(conflict.cellIndex, GLOBE_RADIUS + 0.05);
       const normal = new THREE.Vector3(x, y, z).normalize();
 
       const confGroup = new THREE.Group();
@@ -584,28 +742,99 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
     }
   }, [tradeRoutes, cities, viewMode]);
 
-  // Update Selection Marker on the Globe
+  // Raycast helper to identify WorldCell index on the globe
+  const raycastCellIndex = (clientX: number, clientY: number): number | null => {
+    if (!mountRef.current || !cameraRef.current || !globeMeshRef.current) return null;
+    const rect = mountRef.current.getBoundingClientRect();
+    const mouseX = ((clientX - rect.left) / rect.width) * 2 - 1;
+    const mouseY = -((clientY - rect.top) / rect.height) * 2 + 1;
+
+    const raycaster = new THREE.Raycaster();
+    raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), cameraRef.current);
+
+    const intersects = raycaster.intersectObject(globeMeshRef.current);
+    if (intersects.length > 0 && intersects[0].uv) {
+      const uv = intersects[0].uv;
+      const c = Math.floor(Math.min(0.99999, Math.max(0, uv.x)) * GRID_COLS);
+      const r = Math.floor(Math.min(0.99999, Math.max(0, 1 - uv.y)) * GRID_ROWS);
+      return Math.max(0, Math.min(cells.length - 1, r * GRID_COLS + c));
+    }
+    return null;
+  };
+
+  // Update Selection Markers on the Globe (Exact Segment Spherical Quads for all selected blocks)
   useEffect(() => {
     const selGroup = selectionMarkerRef.current;
     if (!selGroup) return;
 
-    if (selectedCellIndex === null || !cells[selectedCellIndex]) {
+    // Dispose old geometries from the selection group
+    while (selGroup.children.length > 0) {
+      const child = selGroup.children[0];
+      selGroup.remove(child);
+      if ((child as THREE.Mesh | THREE.Line).geometry) {
+        (child as THREE.Mesh | THREE.Line).geometry.dispose();
+      }
+    }
+
+    if (effectiveSelection.length === 0) {
       selGroup.visible = false;
       return;
     }
 
-    const [x, y, z] = cellIndexToVector3(selectedCellIndex, GLOBE_RADIUS + 0.035);
-    selGroup.position.set(x, y, z);
-    selGroup.lookAt(x * 2, y * 2, z * 2);
-    selGroup.visible = true;
-  }, [selectedCellIndex, cells]);
+    const meshMat = selMeshMatRef.current || new THREE.MeshBasicMaterial({
+      color: 0xf59e0b,
+      transparent: true,
+      opacity: 0.45,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    const lineMat = selLineMatRef.current || new THREE.LineBasicMaterial({
+      color: 0xfffbeb,
+      transparent: true,
+      opacity: 0.95,
+      depthWrite: false,
+    });
 
-  // Pointer Interaction (Raycasting & Cell Selection)
+    // Create an exact curved spherical quad mesh and outline for each selected block
+    effectiveSelection.forEach((cellIdx) => {
+      if (!cells[cellIdx]) return;
+      const geo = createCellSegmentGeometry(cellIdx, GLOBE_RADIUS + 0.009);
+      const mesh = new THREE.Mesh(geo, meshMat);
+      selGroup.add(mesh);
+
+      const lineGeo = createCellOutlineGeometry(cellIdx, GLOBE_RADIUS + 0.012);
+      const line = new THREE.Line(lineGeo, lineMat);
+      selGroup.add(line);
+    });
+
+    selGroup.visible = true;
+  }, [effectiveSelection, cells]);
+
+  // Pointer Interaction (Raycasting & Cell Drag Selection)
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     pointerDownPos.current = { x: e.clientX, y: e.clientY };
+    const isDragModeActive = isDragSelectMode || e.shiftKey;
+
+    if (isDragModeActive) {
+      isDragSelectingRef.current = true;
+      if (controlsRef.current) controlsRef.current.enabled = false;
+
+      const cellIdx = raycastCellIndex(e.clientX, e.clientY);
+      if (cellIdx !== null) {
+        lastDragSelectedCellIdx.current = cellIdx;
+        onSelectCell(cellIdx, e.shiftKey || effectiveSelection.length > 0);
+      }
+    }
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isDragSelectingRef.current) {
+      isDragSelectingRef.current = false;
+      lastDragSelectedCellIdx.current = null;
+      if (controlsRef.current) controlsRef.current.enabled = true;
+      return;
+    }
+
     if (!pointerDownPos.current) return;
     const dx = Math.abs(e.clientX - pointerDownPos.current.x);
     const dy = Math.abs(e.clientY - pointerDownPos.current.y);
@@ -614,39 +843,25 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
     // Only treat as click if moved less than 6 pixels (distinguishes clicks from drag rotations)
     if (dx > 6 || dy > 6) return;
 
-    if (!mountRef.current || !cameraRef.current || !globeMeshRef.current) return;
-    const rect = mountRef.current.getBoundingClientRect();
-    const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), cameraRef.current);
-
-    const intersects = raycaster.intersectObject(globeMeshRef.current);
-    if (intersects.length > 0 && intersects[0].uv) {
-      const uv = intersects[0].uv;
-      const c = Math.floor(Math.min(0.99999, Math.max(0, uv.x)) * GRID_COLS);
-      const r = Math.floor(Math.min(0.99999, Math.max(0, 1 - uv.y)) * GRID_ROWS);
-      const cellIdx = Math.max(0, Math.min(cells.length - 1, r * GRID_COLS + c));
-      onSelectCell(cellIdx);
+    const cellIdx = raycastCellIndex(e.clientX, e.clientY);
+    if (cellIdx !== null) {
+      onSelectCell(cellIdx, e.shiftKey);
     }
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!mountRef.current || !cameraRef.current || !globeMeshRef.current) return;
-    const rect = mountRef.current.getBoundingClientRect();
-    const mouseX = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-    const mouseY = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    const cellIdx = raycastCellIndex(e.clientX, e.clientY);
 
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), cameraRef.current);
+    // If drag-selecting, continuously add adjacent or diagonally adjacent cells
+    if (isDragSelectingRef.current && cellIdx !== null) {
+      if (cellIdx !== lastDragSelectedCellIdx.current) {
+        lastDragSelectedCellIdx.current = cellIdx;
+        onSelectCell(cellIdx, true);
+      }
+    }
 
-    const intersects = raycaster.intersectObject(globeMeshRef.current);
-    if (intersects.length > 0 && intersects[0].uv) {
-      const uv = intersects[0].uv;
-      const c = Math.floor(Math.min(0.99999, Math.max(0, uv.x)) * GRID_COLS);
-      const r = Math.floor(Math.min(0.99999, Math.max(0, 1 - uv.y)) * GRID_ROWS);
-      const cellIdx = Math.max(0, Math.min(cells.length - 1, r * GRID_COLS + c));
+    // Hover state & exact quad shape outline for moused-over block
+    if (cellIdx !== null) {
       const cell = cells[cellIdx];
       if (cell) {
         setHoveredInfo({
@@ -656,11 +871,18 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
         });
         if (onHoverCell) onHoverCell(cellIdx);
 
-        if (hoverMarkerRef.current) {
-          const [hx, hy, hz] = cellIndexToVector3(cellIdx, GLOBE_RADIUS + 0.03);
-          hoverMarkerRef.current.position.set(hx, hy, hz);
-          hoverMarkerRef.current.lookAt(hx * 2, hy * 2, hz * 2);
-          hoverMarkerRef.current.visible = true;
+        // Highlight the entire moused-over segment in its exact quad shape
+        if (hoverMarkerRef.current && hoverMeshRef.current && hoverLineRef.current) {
+          if (effectiveSelection.includes(cellIdx)) {
+            hoverMarkerRef.current.visible = false;
+          } else {
+            hoverMeshRef.current.geometry.dispose();
+            hoverLineRef.current.geometry.dispose();
+
+            hoverMeshRef.current.geometry = createCellSegmentGeometry(cellIdx, GLOBE_RADIUS + 0.006);
+            hoverLineRef.current.geometry = createCellOutlineGeometry(cellIdx, GLOBE_RADIUS + 0.008);
+            hoverMarkerRef.current.visible = true;
+          }
         }
       }
     } else {
@@ -701,14 +923,78 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
       onPointerUp={handlePointerUp}
       onPointerMove={handlePointerMove}
       onPointerLeave={() => {
+        if (isDragSelectingRef.current) {
+          isDragSelectingRef.current = false;
+          lastDragSelectedCellIdx.current = null;
+          if (controlsRef.current) controlsRef.current.enabled = true;
+        }
         setHoveredInfo(null);
         if (onHoverCell) onHoverCell(null);
         if (hoverMarkerRef.current) hoverMarkerRef.current.visible = false;
       }}
       className="relative w-full h-full cursor-grab active:cursor-grabbing select-none overflow-hidden bg-radial from-slate-900 via-slate-950 to-black"
     >
-      {/* Quick Camera Presets (Floating top right, unobtrusive) */}
-      <div className="absolute top-4 right-4 z-20 flex gap-2">
+      {/* 3D Viewport Controls Bar: Drag Multi-Select, Pause Rotation, Multi-Block Badge, Camera Presets */}
+      <div className="absolute top-4 right-4 z-20 flex flex-wrap items-center gap-2">
+        {/* Multi-Selection Counter & Cost Badge */}
+        {effectiveSelection.length > 1 && (
+          <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-amber-950/90 border border-amber-500/70 text-xs shadow-md backdrop-blur-md">
+            <span className="font-bold text-amber-300">
+              {effectiveSelection.length} Blocks
+            </span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-200 border border-amber-500/40 font-mono">
+              +{extraCost} Power
+            </span>
+            {onClearSelection && (
+              <button
+                onClick={onClearSelection}
+                className="text-[10px] text-amber-400 hover:text-white underline ml-1 cursor-pointer"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Drag Multi-Select Mode Toggle */}
+        <button
+          onClick={() => setIsDragSelectMode(!isDragSelectMode)}
+          className={`px-3 py-1 text-xs rounded-lg border font-semibold flex items-center gap-1.5 transition shadow backdrop-blur-md ${
+            isDragSelectMode
+              ? 'border-emerald-500/80 bg-emerald-950/90 text-emerald-300 ring-2 ring-emerald-500/40 shadow-emerald-500/20'
+              : 'border-slate-700 bg-slate-900/85 text-slate-200 hover:text-white hover:bg-slate-800'
+          }`}
+          title={isDragSelectMode ? 'Click to exit Drag Select mode' : 'Toggle Drag Multi-Select mode (or hold Shift while dragging)'}
+        >
+          <Layers className="w-3.5 h-3.5 text-emerald-400" />
+          <span>{isDragSelectMode ? 'Drag Selecting' : 'Drag Multi-Select'}</span>
+        </button>
+
+        {/* Pause / Resume Globe Rotation Button */}
+        <button
+          onClick={() => setIsRotationPaused(!isRotationPaused)}
+          className={`px-3 py-1 text-xs rounded-lg border font-semibold flex items-center gap-1.5 transition shadow backdrop-blur-md ${
+            isRotationPaused
+              ? 'border-amber-500/80 bg-amber-950/85 text-amber-300 hover:bg-amber-900/90'
+              : 'border-slate-700 bg-slate-900/85 text-slate-200 hover:text-white hover:bg-slate-800'
+          }`}
+          title={isRotationPaused ? 'Resume globe rotation' : 'Pause globe rotation'}
+        >
+          {isRotationPaused ? (
+            <>
+              <Play className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
+              <span>Resume Rotation</span>
+            </>
+          ) : (
+            <>
+              <Pause className="w-3.5 h-3.5 text-amber-400" />
+              <span>Pause Rotation</span>
+            </>
+          )}
+        </button>
+
+        <div className="h-4 w-[1px] bg-slate-700/80 mx-0.5 hidden sm:block" />
+
         <button
           onClick={() => resetCamera('equator')}
           className="px-2.5 py-1 text-xs rounded border border-slate-700 bg-slate-900/80 text-slate-300 hover:text-white hover:bg-slate-800 transition shadow backdrop-blur-sm"

@@ -48,6 +48,15 @@ export function calculateShapingCost(
 }
 
 /**
+ * Calculates power cost when selecting multiple blocks via drag:
+ * Increases cost by 1 for the first 2 blocks, then by 2 for every block beyond that.
+ */
+export function calculateMultiCellCost(baseCost: number, cellCount: number): number {
+  if (cellCount <= 1) return baseCost;
+  return baseCost + 1 + (cellCount - 2) * 2;
+}
+
+/**
  * Dawn of Worlds exact costs table (Page 7 of official rulebook)
  */
 export const DAWN_OF_WORLDS_COSTS: Record<ActionPowerType, Record<AgeId, number>> = {

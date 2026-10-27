@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ClimateType, TerrainType, WorldCell } from '../types/game';
+import { ClimateType, TerrainType, WorldCell, WorldStructureType } from '../types/game';
 
 export const GRID_ROWS = 24; // Latitude divisions (-80 to +80)
 export const GRID_COLS = 48; // Longitude divisions (-180 to +180)
@@ -90,11 +90,17 @@ export function computeTerrain(elevation: number, moisture: number, climate: Cli
 }
 
 /**
- * Generate the initial nascent world:
- * A mostly blank oceanic globe with a primal continent and scattered archipelagos
- * ready for the gods to shape.
+ * Generate the initial nascent world based on selected WorldStructureType:
+ * - 'continental': Organic dual continents + island chains
+ * - 'pangea': Singular grand supercontinent with mountain spine surrounded by world ocean
+ * - 'archipelago': Vast maritime archipelagos and scattered atolls
+ * - 'shattered': Fractured tectonic plate rifts, jagged rift valleys and deep bays
+ * - 'waterworld': Deep abyssal oceanic planet with sparse nascent volcanic caldera islands
  */
-export function generateInitialWorld(): WorldCell[] {
+export function generateInitialWorld(
+  worldStructure: WorldStructureType = 'continental',
+  seedOffset = 0
+): WorldCell[] {
   const cells: WorldCell[] = [];
 
   for (let r = 0; r < GRID_ROWS; r++) {
@@ -106,44 +112,104 @@ export function generateInitialWorld(): WorldCell[] {
       const lon = -180 + ((c + 0.5) / GRID_COLS) * 360;
       const index = r * GRID_COLS + c;
 
-      // Create organic initial continental seeds using trigonometric waves
       const nx = Math.cos((lon * Math.PI) / 180) * Math.cos((lat * Math.PI) / 180);
       const ny = Math.sin((lat * Math.PI) / 180);
       const nz = Math.sin((lon * Math.PI) / 180) * Math.cos((lat * Math.PI) / 180);
 
-      // Primary continental noise
-      let elevation =
-        Math.sin(nx * 2.5 + ny * 1.8) * 0.4 +
-        Math.cos(nz * 2.2 - ny * 1.5) * 0.35 +
-        Math.sin(nx * 4.0 - nz * 3.0) * 0.2 -
-        0.25; // default ocean biased
+      let elevation = 0;
 
-      // Create one prominent ancient supercontinent (Meglin / Gondwana style)
-      const distToContinentA = Math.hypot(lat - 10, lon - 25);
-      if (distToContinentA < 35) {
-        elevation += Math.cos((distToContinentA / 35) * (Math.PI / 2)) * 0.65;
-      }
+      if (worldStructure === 'pangea') {
+        // One grand colossal landmass centered on equator/prime meridian
+        const distFromCenter = Math.hypot(lat, lon);
+        let baseNoise = Math.sin(nx * 2.0 + ny * 1.5) * 0.25 + Math.cos(nz * 2.0) * 0.2;
+        if (distFromCenter < 52) {
+          elevation = Math.cos((distFromCenter / 52) * (Math.PI / 2)) * 0.85 + baseNoise - 0.1;
+          // Central mountain spine
+          if (Math.abs(lon) < 14 && Math.abs(lat) < 35) {
+            elevation += 0.35;
+          }
+        } else {
+          elevation = -0.55 + baseNoise * 0.5;
+        }
+      } else if (worldStructure === 'archipelago') {
+        // Hundreds of scattered islands and atolls across vast shallow waters
+        elevation =
+          Math.sin(nx * 6.0 + seedOffset) * 0.35 +
+          Math.cos(nz * 6.5) * 0.35 +
+          Math.sin((lat * Math.PI) / 30) * 0.2 -
+          0.38;
+        // Scattered hotspot island arcs
+        const arcA = Math.hypot(lat - 15, lon - 40);
+        if (arcA < 22) elevation += Math.cos((arcA / 22) * (Math.PI / 2)) * 0.6;
+        const arcB = Math.hypot(lat + 10, lon + 80);
+        if (arcB < 25) elevation += Math.cos((arcB / 25) * (Math.PI / 2)) * 0.65;
+        const arcC = Math.hypot(lat - 30, lon + 140);
+        if (arcC < 20) elevation += Math.cos((arcC / 20) * (Math.PI / 2)) * 0.55;
+      } else if (worldStructure === 'shattered') {
+        // High frequency chaotic tectonic rifting with fractured fault lines
+        elevation =
+          Math.sin(nx * 4.5 + ny * 3.5) * 0.45 +
+          Math.cos(nz * 5.0 - nx * 3.0) * 0.4 +
+          Math.sin((lon + lat) * 0.12) * 0.25 -
+          0.22;
+        // Deep rift faults
+        if (Math.abs(Math.sin(lon * 0.08) - lat * 0.02) < 0.18) {
+          elevation -= 0.45;
+        }
+      } else if (worldStructure === 'waterworld') {
+        // Deep endless ocean abyss with 3-4 nascent volcanic hot spots
+        elevation = -0.65 + Math.sin(nx * 3.0) * 0.15;
+        const volcanoA = Math.hypot(lat - 5, lon - 20);
+        if (volcanoA < 12) elevation += Math.cos((volcanoA / 12) * (Math.PI / 2)) * 0.95;
+        const volcanoB = Math.hypot(lat + 22, lon + 100);
+        if (volcanoB < 14) elevation += Math.cos((volcanoB / 14) * (Math.PI / 2)) * 0.90;
+        const volcanoC = Math.hypot(lat - 25, lon + 160);
+        if (volcanoC < 10) elevation += Math.cos((volcanoC / 10) * (Math.PI / 2)) * 0.85;
+      } else {
+        // Default 'continental': Dual organic continents + island clusters
+        elevation =
+          Math.sin(nx * 2.5 + ny * 1.8) * 0.4 +
+          Math.cos(nz * 2.2 - ny * 1.5) * 0.35 +
+          Math.sin(nx * 4.0 - nz * 3.0) * 0.2 -
+          0.25;
 
-      // Secondary island cluster
-      const distToContinentB = Math.hypot(lat + 20, lon + 120);
-      if (distToContinentB < 25) {
-        elevation += Math.cos((distToContinentB / 25) * (Math.PI / 2)) * 0.55;
+        const distToContinentA = Math.hypot(lat - 10, lon - 25);
+        if (distToContinentA < 35) {
+          elevation += Math.cos((distToContinentA / 35) * (Math.PI / 2)) * 0.65;
+        }
+
+        const distToContinentB = Math.hypot(lat + 20, lon + 120);
+        if (distToContinentB < 25) {
+          elevation += Math.cos((distToContinentB / 25) * (Math.PI / 2)) * 0.55;
+        }
       }
 
       // Clamping elevation
       elevation = Math.max(-1.0, Math.min(1.0, elevation));
 
-      const moisture = Math.max(0, Math.min(1, 0.5 + Math.sin(lon * 0.05) * 0.3 + (elevation > 0 ? 0.1 : 0.4)));
+      const moisture = Math.max(
+        0,
+        Math.min(1, 0.5 + Math.sin(lon * 0.05) * 0.3 + (elevation > 0 ? 0.1 : 0.4))
+      );
       const climate = computeClimate(lat, moisture);
       const terrain = computeTerrain(elevation, moisture, climate);
 
-      // Sparse natural resources on land
+      // Natural resources on land (approx 22% of land cells)
       let resource: string | null = null;
-      if (elevation > 0 && Math.random() < 0.2) {
+      if (elevation > 0 && Math.random() < 0.22) {
         resource = RESOURCES_LIST[Math.floor(Math.random() * RESOURCES_LIST.length)];
       }
 
-      const fertility = elevation > 0 ? (terrain === 'forest' ? 0.8 : terrain === 'plains' ? 0.7 : terrain === 'desert' ? 0.2 : 0.4) : 0;
+      const fertility =
+        elevation > 0
+          ? terrain === 'forest'
+            ? 0.8
+            : terrain === 'plains'
+            ? 0.7
+            : terrain === 'desert'
+            ? 0.2
+            : 0.45
+          : 0;
 
       cells.push({
         index,
@@ -189,6 +255,27 @@ export function getAdjacentCellIndices(cellIndex: number, radius = 1): number[] 
   }
 
   return Array.from(results);
+}
+
+/**
+ * Check if two cells on the spherical grid are adjacent (orthogonally or diagonally),
+ * accounting for longitude wrap-around.
+ */
+export function areCellsAdjacent(cellIdx1: number, cellIdx2: number): boolean {
+  if (cellIdx1 === cellIdx2) return true;
+  const r1 = Math.floor(cellIdx1 / GRID_COLS);
+  const c1 = cellIdx1 % GRID_COLS;
+  const r2 = Math.floor(cellIdx2 / GRID_COLS);
+  const c2 = cellIdx2 % GRID_COLS;
+
+  const dr = Math.abs(r1 - r2);
+  if (dr > 1) return false;
+
+  let dc = Math.abs(c1 - c2);
+  if (dc > GRID_COLS / 2) {
+    dc = GRID_COLS - dc;
+  }
+  return dc <= 1;
 }
 
 export type ShapingScope = 'pinpoint' | 'regional' | 'cascade';
@@ -323,7 +410,7 @@ export function applyCascadingTerrainModification(
           plainsCount++;
         }
       } else if (ring >= 4 && scope === 'cascade') {
-        if (cell.elevation < 0) {
+        if (cell.elevation < 0 && cell.elevation >= -0.35) {
           cell.elevation = -0.15;
           cell.terrain = 'shallow_water';
           shallowsCount++;
@@ -350,7 +437,7 @@ export function applyCascadingTerrainModification(
         if (cell.terrain === 'forest') forestCount++;
         else plainsCount++;
       } else if (ring >= 4 && scope === 'cascade') {
-        if (cell.elevation < 0) {
+        if (cell.elevation < 0 && cell.elevation >= -0.35) {
           cell.elevation = -0.16;
           cell.terrain = 'shallow_water';
           shallowsCount++;
@@ -373,7 +460,7 @@ export function applyCascadingTerrainModification(
         if (cell.terrain === 'forest') forestCount++;
         else plainsCount++;
       } else if (ring >= 3 && scope === 'cascade') {
-        if (cell.elevation < 0) {
+        if (cell.elevation < 0 && cell.elevation >= -0.35) {
           cell.elevation = -0.15;
           cell.terrain = 'shallow_water';
           shallowsCount++;
@@ -455,35 +542,106 @@ export function applyCascadingTerrainModification(
         }
       }
     } else if (targetTerrain === 'deep_ocean' || targetTerrain === 'ocean') {
+      const origElev = cell.elevation;
+      const origTerrain = cell.terrain;
+
       if (ring === 0) {
-        cell.elevation = -0.80;
+        // Epicenter: Cleave abyssal chasm (sink to deep ocean)
+        cell.elevation = Math.min(origElev - 0.5, -0.85);
         cell.terrain = 'deep_ocean';
         cell.population = 0;
         cell.cityId = null;
         cell.civilizationId = null;
         oceanCount++;
       } else if (ring === 1 && scope !== 'pinpoint') {
-        cell.elevation = -0.48;
-        cell.terrain = 'ocean';
-        cell.population = 0;
-        cell.cityId = null;
-        cell.civilizationId = null;
-        oceanCount++;
+        // Ring 1: Direct sinking cascade
+        if (origTerrain === 'deep_ocean') {
+          cell.elevation = Math.min(origElev, -0.85);
+          cell.terrain = 'deep_ocean';
+          oceanCount++;
+        } else if (origTerrain === 'ocean') {
+          // Ocean -> Deep ocean
+          cell.elevation = -0.80;
+          cell.terrain = 'deep_ocean';
+          oceanCount++;
+        } else if (origTerrain === 'shallow_water') {
+          // Shallow Water -> Ocean
+          cell.elevation = -0.55;
+          cell.terrain = 'ocean';
+          oceanCount++;
+        } else {
+          // Land submerged into ocean
+          cell.elevation = -0.50;
+          cell.terrain = 'ocean';
+          cell.population = 0;
+          cell.cityId = null;
+          cell.civilizationId = null;
+          oceanCount++;
+        }
       } else if (ring === 2 && scope !== 'pinpoint') {
-        cell.elevation = -0.18;
-        cell.terrain = 'shallow_water';
-        shallowsCount++;
+        // Ring 2: Sinks without ever raising levels in the impact zone
+        if (origTerrain === 'deep_ocean') {
+          // Deep ocean remains deep ocean (never raised to shallow water)
+          cell.elevation = Math.min(origElev, -0.80);
+          cell.terrain = 'deep_ocean';
+          oceanCount++;
+        } else if (origTerrain === 'ocean') {
+          // Ocean -> Deep ocean
+          cell.elevation = -0.75;
+          cell.terrain = 'deep_ocean';
+          oceanCount++;
+        } else if (origTerrain === 'shallow_water') {
+          // Shallow Water -> Ocean
+          cell.elevation = -0.48;
+          cell.terrain = 'ocean';
+          oceanCount++;
+        } else if (origElev > 0.4) {
+          // High mountains/hills erode downward
+          cell.elevation = origElev - 0.35;
+          cell.terrain = cell.elevation > 0.4 ? 'hills' : 'plains';
+          if (cell.terrain === 'hills') hillsCount++;
+          else plainsCount++;
+        } else {
+          // Lowlands (plains/swamp) submerged into shallow water
+          cell.elevation = -0.18;
+          cell.terrain = 'shallow_water';
+          cell.population = 0;
+          cell.cityId = null;
+          cell.civilizationId = null;
+          shallowsCount++;
+        }
       } else if (ring >= 3 && scope === 'cascade') {
-        if (cell.elevation > 0.5) {
-          cell.elevation -= 0.25;
-          cell.terrain = 'hills';
-          hillsCount++;
-        } else if (cell.elevation > 0.2) {
-          cell.elevation -= 0.15;
-          cell.terrain = 'plains';
-          plainsCount++;
+        // Ring 3 & 4 (Cascade outer ripple):
+        if (origTerrain === 'deep_ocean') {
+          cell.elevation = Math.min(origElev, -0.80);
+          cell.terrain = 'deep_ocean';
+        } else if (origTerrain === 'ocean') {
+          cell.elevation = Math.min(origElev, -0.55);
+          cell.terrain = 'ocean';
+        } else if (origTerrain === 'shallow_water') {
+          // Shallow water sinks to ocean
+          cell.elevation = -0.42;
+          cell.terrain = 'ocean';
+          oceanCount++;
+        } else if (origElev > 0.4) {
+          // High terrain erodes downward
+          cell.elevation = origElev - 0.25;
+          cell.terrain = cell.elevation > 0.4 ? 'hills' : 'plains';
+          if (cell.terrain === 'hills') hillsCount++;
+          else plainsCount++;
+        } else if (origElev > 0) {
+          // Coastal plains/swamp submerged into shallow water
+          cell.elevation = -0.16;
+          cell.terrain = 'shallow_water';
+          cell.population = 0;
+          cell.cityId = null;
+          cell.civilizationId = null;
+          shallowsCount++;
         }
       }
+
+      // Invariant: Never accidentally raise elevation when sinking ocean
+      cell.elevation = Math.min(origElev, cell.elevation);
     } else if (targetTerrain === 'desert') {
       if (ring === 0) {
         cell.terrain = 'desert';
