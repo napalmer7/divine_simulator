@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { City, Civilization, MapViewMode, WorldCell } from '../types/game';
+import { City, Civilization, MapViewMode, Race, WorldCell } from '../types/game';
 import { GRID_COLS, GRID_ROWS } from '../simulation/worldGrid';
 import { Sparkles, Gem, Pickaxe, Wheat, Trees, Flame, Droplets, Compass, Eye } from 'lucide-react';
 
@@ -12,6 +12,7 @@ interface FlatMapAtlasProps {
   cells: WorldCell[];
   cities: City[];
   civilizations: Civilization[];
+  races?: Race[];
   selectedCellIndex: number | null;
   selectedCellIndices?: number[];
   onSelectCell: (cellIndex: number, isMultiSelect?: boolean) => void;
@@ -49,6 +50,7 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
   cells,
   cities,
   civilizations,
+  races = [],
   selectedCellIndex,
   selectedCellIndices = [],
   onSelectCell,
@@ -234,11 +236,25 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
                   cell.resource ? ` • Resource: ${cell.resource}` : ''
                 }${city ? ` • City: ${city.name}` : ''}`}
               >
-                {/* Settlement Citadel Icon */}
+                {/* Settlement Citadel or Ancient Ruin Icon */}
                 {city && (
-                  <span className="text-[10px] leading-none drop-shadow z-10" title={`City: ${city.name}`}>
-                    🏛
+                  <span
+                    className={`text-[10px] leading-none drop-shadow z-10 ${
+                      city.status === 'ruined' ? 'animate-pulse text-red-400' : ''
+                    }`}
+                    title={city.status === 'ruined' ? `Ruins of ${city.name} (Sacked/Abandoned)` : `City: ${city.name}`}
+                  >
+                    {city.status === 'ruined' ? '🏚' : '🏛'}
                   </span>
+                )}
+
+                {/* Other Deities' Races / Civilization Territory Markers */}
+                {!city && cell.civilizationId && (
+                  <span
+                    className="w-1.5 h-1.5 rounded-full z-10 opacity-80 shadow-sm"
+                    style={{ backgroundColor: civ?.color || '#cbd5e1' }}
+                    title={`Territory: ${civ?.name}`}
+                  />
                 )}
 
                 {/* Prominent High-Visibility Resource Icon / Glyph */}
@@ -290,18 +306,37 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
                       Elev: {inspectedCell.elevation >= 0 ? `+${inspectedCell.elevation.toFixed(2)}` : inspectedCell.elevation.toFixed(2)}
                     </span>
                   </div>
-                  <div className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-2">
+                  <div className="text-[11px] text-slate-400 mt-0.5 flex flex-wrap items-center gap-2">
                     <span>Moisture: {Math.round(inspectedCell.moisture * 100)}%</span>
                     <span>•</span>
                     <span>Fertility: {Math.round(inspectedCell.fertility * 100)}%</span>
                     {inspectedCity && (
                       <>
                         <span>•</span>
-                        <span className="text-amber-300 font-semibold">
-                          🏛 {inspectedCity.name} (Pop: {inspectedCity.population.toLocaleString()})
+                        <span
+                          className={`font-semibold ${
+                            inspectedCity.status === 'ruined' ? 'text-red-400 font-bold' : 'text-amber-300'
+                          }`}
+                        >
+                          {inspectedCity.status === 'ruined'
+                            ? `🏚 Ruins of ${inspectedCity.name} (Sacked/Abandoned)`
+                            : `🏛 ${inspectedCity.name} (Pop: ${inspectedCity.population.toLocaleString()})`}
                         </span>
                       </>
                     )}
+                    {(() => {
+                      const cCiv = civilizations.find((c) => c.id === inspectedCell.civilizationId);
+                      const cRace = races.find((r) => r.id === cCiv?.raceId);
+                      if (!cRace) return null;
+                      return (
+                        <>
+                          <span>•</span>
+                          <span className="text-cyan-300 font-mono text-[10px] bg-slate-900 px-1.5 py-0.5 rounded border border-slate-700">
+                            {cRace.name} (Procreation: {cRace.procreationRate?.toFixed(1) || cRace.fertilityMultiplier?.toFixed(1)}x • {cRace.expansionInclination > 0.7 ? 'Aggressive Expansion' : cRace.expansionInclination < 0.3 ? 'Reclusive' : 'Steady Expansion'})
+                          </span>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>
@@ -375,6 +410,12 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded bg-[#991b1b] inline-block border border-slate-700"></span> Volcanic
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs">🏛</span> Settlement
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs">🏚</span> Ruin
             </div>
           </div>
 

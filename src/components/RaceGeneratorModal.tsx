@@ -326,6 +326,9 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
       baseAlignment,
       militaryBonus: Math.max(0, Math.round(militaryBonus)),
       fertilityMultiplier: Number(Math.max(0.4, fertilityMultiplier).toFixed(2)),
+      procreationRate: Number(Math.max(0.4, fertilityMultiplier).toFixed(2)),
+      expansionInclination: category === 'monstrous' ? 0.85 : 0.55,
+      settlementTendency: category === 'monstrous' ? 0.75 : 0.6,
       techAffinity: Number(Math.max(0.4, techAffinity).toFixed(2)),
       color,
     };

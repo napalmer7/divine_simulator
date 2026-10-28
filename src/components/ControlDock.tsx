@@ -46,9 +46,15 @@ interface ControlDockProps {
   onClearSelection?: () => void;
   onOpenRaceSynthesizer: () => void;
   onOpenMiracleWeaver: () => void;
+  onOpenTechTree?: () => void;
+  onOpenRaceEvolution?: () => void;
+  onRebuildRuin?: () => void;
+  isRuinSelected?: boolean;
+  ruinedCityName?: string;
   onShapeTerrain: (terrain: TerrainType, scope: ShapingScope) => void;
   onShapeClimate: (climate: ClimateType, scope: ShapingScope) => void;
   onExecuteAction: (actionType: ActionPowerType, extraPayload?: any) => void;
+  onExecuteCatastrophe?: (type: 'meteor' | 'volcano' | 'deluge' | 'wildfire') => void;
 }
 
 export const ControlDock: React.FC<ControlDockProps> = ({
@@ -59,15 +65,22 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   onClearSelection,
   onOpenRaceSynthesizer,
   onOpenMiracleWeaver,
+  onOpenTechTree,
+  onOpenRaceEvolution,
+  onRebuildRuin,
+  isRuinSelected = false,
+  ruinedCityName,
   onShapeTerrain,
   onShapeClimate,
   onExecuteAction,
+  onExecuteCatastrophe,
 }) => {
   // Start open so players immediately see their options, but they can easily collapse it into the magical pullout handle
   const [isOpen, setIsOpen] = useState(true);
   const [activeCategory, setActiveCategory] = useState<'land' | 'life' | 'civilization' | 'wrath'>('land');
   const [shapingScope, setShapingScope] = useState<ShapingScope>('cascade');
   const [landSubTab, setLandSubTab] = useState<'geology' | 'climate'>('geology');
+  const [catastropheType, setCatastropheType] = useState<'meteor' | 'volcano' | 'deluge' | 'wildfire'>('meteor');
 
   const selectedCount = Math.max(1, selectedCellIndices.length || (selectedCell ? 1 : 0));
   const costs = DAWN_OF_WORLDS_COSTS;
@@ -85,11 +98,11 @@ export const ControlDock: React.FC<ControlDockProps> = ({
 
   return (
     <>
-      {/* 1. COLLAPSED STATE: Eye-catching, fun magical floating trigger handle on the right edge */}
+      {/* 1. COLLAPSED STATE: Eye-catching magical floating trigger handle strictly bounded within the main workspace */}
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="group fixed right-0 top-1/2 -translate-y-1/2 z-40 flex items-center bg-gradient-to-l from-amber-500 via-purple-600 to-indigo-700 hover:from-amber-400 hover:via-purple-500 hover:to-indigo-600 text-white pl-4 pr-3 py-3 rounded-l-2xl shadow-[0_0_25px_rgba(245,158,11,0.5)] border-y border-l border-amber-300/80 transition-all duration-300 hover:scale-105 hover:pr-4 cursor-pointer"
+          className="group absolute right-0 top-1/2 -translate-y-1/2 z-20 flex items-center bg-gradient-to-l from-amber-500 via-purple-600 to-indigo-700 hover:from-amber-400 hover:via-purple-500 hover:to-indigo-600 text-white pl-4 pr-3 py-3 rounded-l-2xl shadow-[0_0_25px_rgba(245,158,11,0.5)] border-y border-l border-amber-300/80 transition-all duration-300 hover:scale-105 hover:pr-4 cursor-pointer"
           title="Open Divine Powers Drawer"
           aria-label="Open Divine Powers Drawer"
         >
@@ -116,11 +129,11 @@ export const ControlDock: React.FC<ControlDockProps> = ({
         </button>
       )}
 
-      {/* 2. EXPANDED STATE: Sleek Pullout Drawer from the right-hand side */}
+      {/* 2. EXPANDED STATE: Sleek Pullout Drawer strictly bounded below top bar (never covers header) */}
       {isOpen && (
-        <div className="fixed inset-y-0 right-0 z-40 w-full sm:w-[480px] md:w-[500px] bg-slate-950/95 border-l border-amber-500/40 shadow-2xl backdrop-blur-md flex flex-col text-slate-100 animate-slide-left">
+        <div className="absolute top-0 bottom-0 right-0 z-20 w-full sm:w-[480px] md:w-[500px] bg-slate-950/95 border-l border-amber-500/40 shadow-2xl backdrop-blur-md flex flex-col text-slate-100 animate-slide-left overflow-hidden">
           {/* Drawer Header */}
-          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-900/90">
+          <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-900/90 flex-shrink-0">
             <div className="flex items-center gap-3">
               <div className="relative p-2 rounded-xl bg-gradient-to-br from-amber-500/20 to-purple-500/20 text-yellow-300 border border-amber-500/30 shadow-inner">
                 <Wand2 className="w-5 h-5" />
@@ -550,32 +563,54 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   </div>
                 </button>
 
+                {/* Race Evolution Power (2nd & 3rd Age) */}
+                {currentAge !== '1st_age_land' && onOpenRaceEvolution && (
+                  <button
+                    onClick={onOpenRaceEvolution}
+                    disabled={playerPower < 6}
+                    className="w-full p-3.5 rounded-xl bg-gradient-to-r from-purple-900/60 via-indigo-900/60 to-slate-900 hover:from-purple-800/80 hover:to-indigo-800/80 disabled:opacity-40 border border-purple-500/50 flex items-center justify-between transition shadow"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-lg bg-purple-500/20 text-purple-300 border border-purple-500/40">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <div className="text-left">
+                        <div className="font-bold text-purple-200 text-xs">Evolve Race / Subrace Divergence</div>
+                        <div className="text-[10px] text-slate-400">
+                          Adapt mortals to woodlands, deserts, frost, or caverns
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-amber-400 font-bold text-xs font-mono">6 Power</span>
+                  </button>
+                )}
+
                 {/* Cultural Interventions */}
                 <div className="space-y-2 pt-1">
                   <div className="text-[11px] font-semibold text-slate-300">
                     Civilization & Moral Alignment:
                   </div>
 
-                  <button
-                    onClick={() => onExecuteAction('advance_civ')}
-                    disabled={playerPower < costs.advance_civ[currentAge]}
-                    className="w-full p-3 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-slate-700/80 flex items-center justify-between text-left transition"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-2 rounded-lg bg-amber-500/10 text-amber-400 border border-amber-500/30">
-                        <Hammer className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="font-bold text-white text-xs">Advance Civilization</div>
-                        <div className="text-[10px] text-slate-400">
-                          Bestow technological mastery, smithing, or navigation
+                  {/* 5-Tier Tech Tree Launcher */}
+                  {onOpenTechTree && (
+                    <button
+                      onClick={onOpenTechTree}
+                      className="w-full p-3 rounded-xl bg-gradient-to-r from-blue-950/60 to-slate-900 hover:bg-slate-800 border border-blue-500/40 flex items-center justify-between text-left transition"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="p-2 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                          <Hammer className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-blue-200 text-xs">5-Tier Tech Advancement Tree</div>
+                          <div className="text-[10px] text-slate-400">
+                            Combat, Agriculture, Knowledge, Magic, Naval
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    <span className="text-amber-400 font-bold text-xs">
-                      {costs.advance_civ[currentAge]} Power
-                    </span>
-                  </button>
+                      <span className="text-blue-300 font-bold text-xs">Browse Tiers</span>
+                    </button>
+                  )}
 
                   <button
                     onClick={() => onExecuteAction('purify_civ')}
@@ -625,6 +660,51 @@ export const ControlDock: React.FC<ControlDockProps> = ({
             {/* CATEGORY 3: CIVILIZATION & ARMIES */}
             {activeCategory === 'civilization' && (
               <div className="space-y-2.5">
+                {/* Special Rebuild Ruins Action if selected cell has a ruin */}
+                {isRuinSelected && onRebuildRuin && (
+                  <button
+                    onClick={onRebuildRuin}
+                    disabled={playerPower < 4}
+                    className="w-full p-3.5 rounded-xl bg-gradient-to-r from-amber-600/30 via-yellow-600/30 to-amber-900/40 border border-amber-400/80 flex items-center justify-between text-left transition shadow-lg animate-pulse"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-lg bg-amber-500/20 text-yellow-300 border border-amber-400/40">
+                        <Castle className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-yellow-200 text-xs">
+                          Rebuild & Consecrate Ruins {ruinedCityName ? `of ${ruinedCityName}` : ''}
+                        </div>
+                        <div className="text-[10px] text-amber-200/80">
+                          Restore walls, banish scavengers, and revive the city
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-yellow-300 font-bold text-xs font-mono">4 Power</span>
+                  </button>
+                )}
+
+                {/* 5-Tier Tech Tree Launcher */}
+                {onOpenTechTree && (
+                  <button
+                    onClick={onOpenTechTree}
+                    className="w-full p-3 rounded-xl bg-gradient-to-r from-blue-950/60 to-slate-900 hover:bg-slate-800 border border-blue-500/40 flex items-center justify-between text-left transition"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-lg bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                        <Hammer className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-blue-200 text-xs">5-Tier Tech Advancement Tree</div>
+                        <div className="text-[10px] text-slate-400">
+                          Research Martial, Food, Arcane, and Maritime Techs
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-blue-300 font-bold text-xs">Browse Tiers</span>
+                  </button>
+                )}
+
                 <button
                   onClick={() => onExecuteAction('command_race')}
                   disabled={playerPower < costs.command_race[currentAge]}
@@ -736,50 +816,101 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   </span>
                 </button>
 
-                {/* Catastrophe & Divine Event */}
-                <div className="space-y-2 pt-1">
-                  <button
-                    onClick={() => onExecuteAction('catastrophe')}
-                    disabled={playerPower < costs.catastrophe[currentAge]}
-                    className="w-full p-3 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-red-500/40 flex items-center justify-between text-left transition"
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-2 rounded-lg bg-red-950/80 text-red-400 border border-red-500/30">
+                {/* Catastrophe with Dynamic Type Selection */}
+                <div className="p-3.5 rounded-xl bg-slate-900/90 border border-red-500/40 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="p-1.5 rounded-lg bg-red-950 text-red-400 border border-red-500/40">
                         <Flame className="w-4 h-4" />
                       </div>
-                      <div>
-                        <div className="font-bold text-red-300 text-xs">Unleash Catastrophe</div>
-                        <div className="text-[10px] text-slate-400">
-                          Meteor strikes, biblical deluges, or plagues striking enemy armies
-                        </div>
-                      </div>
+                      <div className="font-bold text-red-300 text-xs">Unleash Dynamic Catastrophe</div>
                     </div>
-                    <span className="text-amber-400 font-bold text-xs">
+                    <span className="text-amber-400 font-bold text-xs font-mono">
                       {costs.catastrophe[currentAge]} Power
                     </span>
-                  </button>
+                  </div>
+
+                  {/* Catastrophe Type Selector */}
+                  <div className="grid grid-cols-2 gap-1.5 text-[10px]">
+                    <button
+                      onClick={() => setCatastropheType('meteor')}
+                      className={`p-2 rounded-lg border text-left transition ${
+                        catastropheType === 'meteor'
+                          ? 'border-cyan-400 bg-cyan-950/60 text-white font-bold'
+                          : 'border-slate-800 bg-slate-950 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      ☄️ Meteor Impact (Crater Lake)
+                    </button>
+                    <button
+                      onClick={() => setCatastropheType('volcano')}
+                      className={`p-2 rounded-lg border text-left transition ${
+                        catastropheType === 'volcano'
+                          ? 'border-orange-400 bg-orange-950/60 text-white font-bold'
+                          : 'border-slate-800 bg-slate-950 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      🌋 Supervolcano (Caldera & Ash)
+                    </button>
+                    <button
+                      onClick={() => setCatastropheType('deluge')}
+                      className={`p-2 rounded-lg border text-left transition ${
+                        catastropheType === 'deluge'
+                          ? 'border-blue-400 bg-blue-950/60 text-white font-bold'
+                          : 'border-slate-800 bg-slate-950 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      🌊 Abyssal Deluge (Ocean Abyss)
+                    </button>
+                    <button
+                      onClick={() => setCatastropheType('wildfire')}
+                      className={`p-2 rounded-lg border text-left transition ${
+                        catastropheType === 'wildfire'
+                          ? 'border-red-400 bg-red-950/60 text-white font-bold'
+                          : 'border-slate-800 bg-slate-950 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      🔥 Wildfire (Ash Scorched)
+                    </button>
+                  </div>
 
                   <button
-                    onClick={() => onExecuteAction('event')}
-                    disabled={playerPower < costs.event[currentAge]}
-                    className="w-full p-3 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-purple-500/40 flex items-center justify-between text-left transition"
+                    onClick={() => {
+                      if (onExecuteCatastrophe) {
+                        onExecuteCatastrophe(catastropheType);
+                      } else {
+                        onExecuteAction('catastrophe');
+                      }
+                    }}
+                    disabled={playerPower < costs.catastrophe[currentAge]}
+                    className="w-full py-2 px-3 rounded-lg bg-gradient-to-r from-red-600 to-orange-600 hover:from-red-500 hover:to-orange-500 disabled:opacity-40 text-white font-bold text-xs transition shadow flex items-center justify-center gap-1.5"
                   >
-                    <div className="flex items-center gap-2.5">
-                      <div className="p-2 rounded-lg bg-purple-950/80 text-purple-400 border border-purple-500/30">
-                        <Sparkles className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="font-bold text-white text-xs">Trigger Divine Event</div>
-                        <div className="text-[10px] text-slate-400">
-                          Cosmic omens, Gold Rushes, Arcane Surges, or Great Migrations
-                        </div>
-                      </div>
-                    </div>
-                    <span className="text-amber-400 font-bold text-xs">
-                      {costs.event[currentAge]} Power
-                    </span>
+                    <Flame className="w-3.5 h-3.5" />
+                    <span>Strike Target with {catastropheType.toUpperCase()} ({costs.catastrophe[currentAge]} Power)</span>
                   </button>
                 </div>
+
+                {/* Divine Event */}
+                <button
+                  onClick={() => onExecuteAction('event')}
+                  disabled={playerPower < costs.event[currentAge]}
+                  className="w-full p-3 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-purple-500/40 flex items-center justify-between text-left transition"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2 rounded-lg bg-purple-950/80 text-purple-400 border border-purple-500/30">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-white text-xs">Trigger Divine Event</div>
+                      <div className="text-[10px] text-slate-400">
+                        Cosmic omens, Gold Rushes, Arcane Surges, or Great Migrations
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-amber-400 font-bold text-xs">
+                    {costs.event[currentAge]} Power
+                  </span>
+                </button>
               </div>
             )}
           </div>

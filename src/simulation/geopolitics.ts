@@ -193,3 +193,203 @@ export function detectTerritorialFriction(
 
   return conflicts;
 }
+
+export interface TerritoryExpansionResult {
+  updatedCells: WorldCell[];
+  updatedCities: City[];
+  updatedCivilizations: Civilization[];
+  narratives: string[];
+}
+
+/**
+ * Natural territory expansion and settlement founding in the 2nd and 3rd Age
+ * based on each race's procreation rate and settlement inclinations.
+ */
+export function simulateTerritoryExpansionAndSettlements(
+  cells: WorldCell[],
+  cities: City[],
+  civilizations: Civilization[],
+  races: Race[],
+  currentAge: string,
+  currentRound: number
+): TerritoryExpansionResult {
+  if (currentAge === '1st_age_land') {
+    return {
+      updatedCells: cells,
+      updatedCities: cities,
+      updatedCivilizations: civilizations,
+      narratives: [],
+    };
+  }
+
+  const cellMap = new Map<number, WorldCell>(cells.map((c) => [c.index, { ...c }]));
+  const updatedCities = [...cities];
+  const updatedCivs = civilizations.map((c) => ({ ...c, cityIds: [...c.cityIds] }));
+  const narratives: string[] = [];
+
+  for (const civ of updatedCivs) {
+    const race = races.find((r) => r.id === civ.raceId);
+    if (!race) continue;
+
+    const procreation = race.procreationRate || race.fertilityMultiplier || 1.0;
+    const expansion = race.expansionInclination || 0.5;
+    const settlementTendency = race.settlementTendency || 0.5;
+    const hasWonderAffinity = Boolean(race.naturalWonderAffinity);
+
+    // 1. Gather all territory cells currently claimed by this civilization
+    const territoryIndices = Array.from(cellMap.values())
+      .filter((c) => c.civilizationId === civ.id)
+      .map((c) => c.index);
+
+    if (territoryIndices.length === 0) continue;
+
+    // 2. Identify candidate adjacent unowned land cells
+    const candidateIndices = new Set<number>();
+    for (const tIdx of territoryIndices) {
+      const neighbors = getAdjacentCellIndices(tIdx, 1);
+      for (const nIdx of neighbors) {
+        const neighbor = cellMap.get(nIdx);
+        if (neighbor && neighbor.elevation > 0 && !neighbor.civilizationId) {
+          candidateIndices.add(nIdx);
+        }
+      }
+    }
+
+    // Number of cells this civ can expand into this round
+    const maxExpansionCells = Math.max(1, Math.floor(procreation * expansion * 2.2));
+    const scoredCandidates: { index: number; score: number }[] = [];
+
+    for (const cIdx of candidateIndices) {
+      const cell = cellMap.get(cIdx)!;
+      let score = 1;
+
+      // Favored biomes
+      if (race.favoredBiomes.includes(cell.terrain)) score += 3;
+      // Fertility bonus
+      score += cell.fertility * 2.5;
+
+      // Natural wonder / sacred grove affinity
+      if (hasWonderAffinity && (cell.resource === 'Sacred Grove Springs' || cell.resource === 'Arcane Mana Springs')) {
+        score += 8;
+      } else if (cell.resource) {
+        score += 2;
+      }
+
+      // Aggressive warlike bonus (Orcs/Goblins)
+      if (expansion > 0.7) {
+        score += 2.5;
+      }
+
+      scoredCandidates.push({ index: cIdx, score });
+    }
+
+    scoredCandidates.sort((a, b) => b.score - a.score);
+    const chosenCells = scoredCandidates.slice(0, maxExpansionCells);
+
+    for (const choice of chosenCells) {
+      const cell = cellMap.get(choice.index)!;
+      cell.civilizationId = civ.id;
+      cell.population = Math.max(25, Math.floor(40 * procreation));
+    }
+
+    if (chosenCells.length > 0) {
+      narratives.push(
+        `${civ.name} (${race.name}) naturally expanded territory across ${chosenCells.length} frontier zones (Procreation: ${procreation.toFixed(1)}x, Expansion: ${expansion > 0.7 ? 'Aggressive' : expansion < 0.3 ? 'Reclusive' : 'Steady'}).`
+      );
+    }
+
+    // 3. Natural Settlement Creation based on racial tendencies
+    const currentCityCount = updatedCities.filter((c) => c.civilizationId === civ.id).length;
+    const currentTerritorySize = Array.from(cellMap.values()).filter((c) => c.civilizationId === civ.id).length;
+
+    // Threshold calculation
+    const territoryThreshold = Math.max(4, Math.floor(currentCityCount * (1.8 / Math.max(0.2, settlementTendency))));
+
+    let shouldFoundSettlement = false;
+    let targetSettlementIdx: number | null = null;
+
+    if (currentTerritorySize >= territoryThreshold) {
+      const potentialCells = Array.from(cellMap.values()).filter(
+        (c) => c.civilizationId === civ.id && !c.cityId && c.elevation > 0
+      );
+
+      if (hasWonderAffinity) {
+        // Elves: search strictly for sacred wonder or high fertility grove
+        const wonderCell = potentialCells.find(
+          (c) => c.resource === 'Sacred Grove Springs' || c.resource === 'Arcane Mana Springs' || (c.terrain === 'forest' && c.fertility > 0.75)
+        );
+        if (wonderCell && Math.random() < 0.6) {
+          shouldFoundSettlement = true;
+          targetSettlementIdx = wonderCell.index;
+        }
+      } else {
+        if (potentialCells.length > 0) {
+          potentialCells.sort((a, b) => (b.fertility + (b.resource ? 0.4 : 0)) - (a.fertility + (a.resource ? 0.4 : 0)));
+          const roll = Math.random();
+          if (roll < settlementTendency * 0.75) {
+            shouldFoundSettlement = true;
+            targetSettlementIdx = potentialCells[0].index;
+          }
+        }
+      }
+    }
+
+    if (shouldFoundSettlement && targetSettlementIdx !== null) {
+      const site = cellMap.get(targetSettlementIdx)!;
+      const namingSuffixes =
+        race.category === 'monstrous'
+          ? ['War-Camp', 'Garrison', 'Redoubt', 'Den', 'Bastion']
+          : race.naturalWonderAffinity
+          ? ['Sanctuary', 'Grove-Haven', 'Spire', 'Bower']
+          : ['Town', 'Hold', 'Settlement', 'Port', 'Burgh'];
+      const suffix = namingSuffixes[Math.floor(Math.random() * namingSuffixes.length)];
+      const settlementName = `${civ.name.split(' ')[0]} ${suffix}`;
+
+      const newCity: City = {
+        id: `city_${civ.id}_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        name: settlementName,
+        civilizationId: civ.id,
+        raceId: race.id,
+        creatorDeityId: civ.creatorDeityId,
+        cellIndex: targetSettlementIdx,
+        lat: site.lat,
+        lon: site.lon,
+        population: Math.floor(180 * procreation),
+        defense: 1,
+        wonders: [],
+        armiesStationed: 0,
+        alignment: race.baseAlignment,
+        wealth: 10,
+        status: 'prospering',
+      };
+
+      site.cityId = newCity.id;
+      site.population = newCity.population;
+      updatedCities.push(newCity);
+      civ.cityIds.push(newCity.id);
+
+      narratives.push(
+        `${civ.name} founded the new ${suffix.toLowerCase()} of ${settlementName} at [${site.lat.toFixed(0)}°, ${site.lon.toFixed(0)}°] based on their ${race.name} settlement inclination.`
+      );
+    }
+  }
+
+  // 4. Check Ruined Cities: Chance to spawn Monstrous Hordes if abandoned for too long
+  for (const city of updatedCities) {
+    if (city.status === 'ruined') {
+      const cell = cellMap.get(city.cellIndex);
+      if (cell && Math.random() < 0.25) {
+        narratives.push(
+          `Eerie shadows stir in the abandoned ruins of ${city.name}—monstrous scavengers and feral abominations gather amidst the broken battlements.`
+        );
+      }
+    }
+  }
+
+  return {
+    updatedCells: Array.from(cellMap.values()),
+    updatedCities,
+    updatedCivilizations: updatedCivs,
+    narratives,
+  };
+}

@@ -158,6 +158,11 @@ export interface Race {
   baseAlignment: number; // -1 evil, 0 neutral, +1 good
   militaryBonus: number;
   fertilityMultiplier: number;
+  procreationRate: number; // 0.4x (Reverent/Slow) to 2.5x (Prolific/Swarming), impacts demographic explosion & territory growth
+  expansionInclination: number; // 0.1 (Reclusive/Isolated) to 1.0 (Aggressive/Imperialist), dictates border expansion
+  settlementTendency: number; // 0.1 (Few Sacred Havens) to 1.0 (Rapid Fortress/Town Sprawl)
+  naturalWonderAffinity?: boolean; // Prefers expanding toward and founding near Sacred Groves and Arcane Springs
+  subraceType?: string; // Regional adaptation descriptor (e.g. Wood Elves, Desert Nomads, Magma Dwarves)
   techAffinity: number;
   color: string;
 }
@@ -178,6 +183,9 @@ export interface City {
   alignment: number;
   wealth: number;
   status: 'prospering' | 'defensive' | 'under_siege' | 'ruined';
+  ruinedYear?: number;
+  ruinedByCivName?: string;
+  ruinedByRaceName?: string;
 }
 
 export interface Civilization {

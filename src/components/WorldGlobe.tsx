@@ -439,9 +439,12 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
     selMeshMatRef.current = new THREE.MeshBasicMaterial({
       color: 0xf59e0b,
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.5,
       side: THREE.DoubleSide,
       depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -3,
+      polygonOffsetUnits: -3,
     });
 
     selLineMatRef.current = new THREE.LineBasicMaterial({
@@ -451,33 +454,40 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
       depthWrite: false,
     });
 
+    selGroup.raycast = () => {};
     globeMesh.add(selGroup);
     selectionMarkerRef.current = selGroup;
 
     // 2. Hover Indicator Group: Exact World Segment Quad Highlight
     const hoverGroup = new THREE.Group();
     hoverGroup.visible = false;
+    hoverGroup.raycast = () => {};
 
-    const initialHoverGeo = createCellSegmentGeometry(0, GLOBE_RADIUS + 0.006);
+    const initialHoverGeo = createCellSegmentGeometry(0, GLOBE_RADIUS + 0.008);
     const hoverMeshMat = new THREE.MeshBasicMaterial({
       color: 0x38bdf8,
       transparent: true,
-      opacity: 0.32,
+      opacity: 0.4,
       side: THREE.DoubleSide,
       depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
     });
     const hoverMesh = new THREE.Mesh(initialHoverGeo, hoverMeshMat);
+    hoverMesh.raycast = () => {};
     hoverGroup.add(hoverMesh);
     hoverMeshRef.current = hoverMesh;
 
-    const initialHoverLineGeo = createCellOutlineGeometry(0, GLOBE_RADIUS + 0.008);
+    const initialHoverLineGeo = createCellOutlineGeometry(0, GLOBE_RADIUS + 0.010);
     const hoverLineMat = new THREE.LineBasicMaterial({
       color: 0x7dd3fc,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.9,
       depthWrite: false,
     });
     const hoverLine = new THREE.Line(initialHoverLineGeo, hoverLineMat);
+    hoverLine.raycast = () => {};
     hoverGroup.add(hoverLine);
     hoverLineRef.current = hoverLine;
 
@@ -752,7 +762,8 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(new THREE.Vector2(mouseX, mouseY), cameraRef.current);
 
-    const intersects = raycaster.intersectObject(globeMeshRef.current);
+    // false = do NOT test child meshes (selectionMarker, hoverMarker, markersGroup), only the globe sphere
+    const intersects = raycaster.intersectObject(globeMeshRef.current, false);
     if (intersects.length > 0 && intersects[0].uv) {
       const uv = intersects[0].uv;
       const c = Math.floor(Math.min(0.99999, Math.max(0, uv.x)) * GRID_COLS);
@@ -784,9 +795,12 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
     const meshMat = selMeshMatRef.current || new THREE.MeshBasicMaterial({
       color: 0xf59e0b,
       transparent: true,
-      opacity: 0.45,
+      opacity: 0.5,
       side: THREE.DoubleSide,
       depthWrite: false,
+      polygonOffset: true,
+      polygonOffsetFactor: -3,
+      polygonOffsetUnits: -3,
     });
     const lineMat = selLineMatRef.current || new THREE.LineBasicMaterial({
       color: 0xfffbeb,
@@ -800,10 +814,12 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
       if (!cells[cellIdx]) return;
       const geo = createCellSegmentGeometry(cellIdx, GLOBE_RADIUS + 0.009);
       const mesh = new THREE.Mesh(geo, meshMat);
+      mesh.raycast = () => {};
       selGroup.add(mesh);
 
       const lineGeo = createCellOutlineGeometry(cellIdx, GLOBE_RADIUS + 0.012);
       const line = new THREE.Line(lineGeo, lineMat);
+      line.raycast = () => {};
       selGroup.add(line);
     });
 
@@ -840,8 +856,8 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
     const dy = Math.abs(e.clientY - pointerDownPos.current.y);
     pointerDownPos.current = null;
 
-    // Only treat as click if moved less than 6 pixels (distinguishes clicks from drag rotations)
-    if (dx > 6 || dy > 6) return;
+    // Treat as click if moved less than 8 pixels
+    if (dx > 8 || dy > 8) return;
 
     const cellIdx = raycastCellIndex(e.clientX, e.clientY);
     if (cellIdx !== null) {

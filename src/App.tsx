@@ -37,6 +37,10 @@ import {
 import {
   applyCascadingTerrainModification,
   applyCascadingClimateModification,
+  applyMultiCellCascadingTerrainModification,
+  applyMultiCellCascadingClimateModification,
+  applyCatastropheToWorld,
+  CatastropheType,
   applyTerrainModification,
   generateInitialWorld,
   getAdjacentCellIndices,
@@ -48,8 +52,15 @@ import {
   calculateTradeRoutes,
   detectTerritorialFriction,
   simulatePopulationAndGrowth,
+  simulateTerritoryExpansionAndSettlements,
 } from './simulation/geopolitics';
 import { resolveBattle, BattleResult } from './simulation/conflicts';
+import {
+  DEFAULT_TECH_TREE,
+  TechCategory,
+  TechItem,
+  calculateTechCost,
+} from './simulation/techTree';
 
 import { WorldGlobe } from './components/WorldGlobe';
 import { FlatMapAtlas } from './components/FlatMapAtlas';
@@ -57,6 +68,8 @@ import { TopStatusBar } from './components/TopStatusBar';
 import { ControlDock } from './components/ControlDock';
 import { RaceGeneratorModal } from './components/RaceGeneratorModal';
 import { MiracleWeaverModal } from './components/MiracleWeaverModal';
+import { RaceEvolutionModal } from './components/RaceEvolutionModal';
+import { TechTreeModal } from './components/TechTreeModal';
 import { BattleModal } from './components/BattleModal';
 import { ChronicleDrawer } from './components/ChronicleDrawer';
 import { PantheonDrawer } from './components/PantheonDrawer';
@@ -133,11 +146,14 @@ export default function App() {
   };
 
   const [mapViewMode, setMapViewMode] = useState<MapViewMode>('physical');
-  const [is3DMode, setIs3DMode] = useState<boolean>(true);
+  const [is3DMode, setIs3DMode] = useState<boolean>(false);
   const [currentWorldStructure, setCurrentWorldStructure] = useState<WorldStructureType>('continental');
 
   const [isRaceModalOpen, setIsRaceModalOpen] = useState(false);
   const [isMiracleModalOpen, setIsMiracleModalOpen] = useState(false);
+  const [isRaceEvolutionOpen, setIsRaceEvolutionOpen] = useState(false);
+  const [isTechTreeOpen, setIsTechTreeOpen] = useState(false);
+  const [techTreeData, setTechTreeData] = useState<Record<TechCategory, TechItem[]>>(DEFAULT_TECH_TREE);
   const [isChronicleOpen, setIsChronicleOpen] = useState(false);
   const [isPantheonOpen, setIsPantheonOpen] = useState(false);
   const [isNewGameModalOpen, setIsNewGameModalOpen] = useState(false);
@@ -147,6 +163,10 @@ export default function App() {
   const playerDeity = deities.find((d) => d.isPlayer) || deities[0];
   const activeDeityId = turnOrder[activeDeityIndex] || playerDeity.id;
   const activeDeity = deities.find((d) => d.id === activeDeityId) || playerDeity;
+
+  const selectedCity = selectedCell?.cityId ? cities.find((c) => c.id === selectedCell.cityId) : null;
+  const isRuinSelected = selectedCity?.status === 'ruined';
+  const ruinedCityName = selectedCity?.name;
 
   const canAdvanceAge = round >= 5;
 
@@ -181,19 +201,58 @@ export default function App() {
         civilizations,
         races
       );
-      setCells(updatedCells);
-      setCities(updatedCities);
+
+      let simulationCells = updatedCells;
+      let simulationCities = updatedCities;
+      let simulationCivs = civilizations;
+
+      if (currentAge === '2nd_age_races' || currentAge === '3rd_age_relations') {
+        const expansionResult = simulateTerritoryExpansionAndSettlements(
+          simulationCells,
+          simulationCities,
+          simulationCivs,
+          races,
+          currentAge,
+          nextRound
+        );
+        simulationCells = expansionResult.updatedCells;
+        simulationCities = expansionResult.updatedCities;
+        simulationCivs = expansionResult.updatedCivilizations;
+
+        if (expansionResult.narratives.length > 0) {
+          const expansionLogs: HistoryLogEntry[] = expansionResult.narratives.map((nar, idx) => ({
+            id: `expand_${Date.now()}_${idx}`,
+            age: currentAge,
+            round: nextRound,
+            year: nextYear,
+            deityId: 'world_nature',
+            deityName: 'Racial Inclination & Frontier Expansion',
+            deityColor: '#10b981',
+            actionType: 'Frontier Expansion',
+            cost: 0,
+            title: 'Natural Realm Expansion & Settlement Growth',
+            description: nar,
+            impact: 'Demographic pressure pushed borders and established settlements.',
+            category: 'civilization',
+          }));
+          setHistory((prev) => [...expansionLogs, ...prev]);
+        }
+      }
+
+      setCells(simulationCells);
+      setCities(simulationCities);
+      setCivilizations(simulationCivs);
 
       // 3. March armies and resolve clashes
       let currentArmiesState = [...armies];
-      let currentCitiesState = [...updatedCities];
+      let currentCitiesState = [...simulationCities];
 
       for (let i = 0; i < currentArmiesState.length; i++) {
         const army = currentArmiesState[i];
         if (army.targetCellIndex !== null && army.targetCellIndex !== army.cellIndex) {
           // Army marches toward target
           army.cellIndex = army.targetCellIndex;
-          const targetC = updatedCells[army.targetCellIndex];
+          const targetC = simulationCells[army.targetCellIndex];
           if (targetC) {
             army.lat = targetC.lat;
             army.lon = targetC.lon;
@@ -208,9 +267,9 @@ export default function App() {
           );
 
           if (enemyCity || enemyArmy) {
-            const attackerCiv = civilizations.find((c) => c.id === army.civilizationId);
+            const attackerCiv = simulationCivs.find((c) => c.id === army.civilizationId);
             const attackerRace = races.find((r) => r.id === attackerCiv?.raceId);
-            const defenderCiv = civilizations.find(
+            const defenderCiv = simulationCivs.find(
               (c) => c.id === (enemyArmy ? enemyArmy.civilizationId : enemyCity?.civilizationId)
             );
             const defenderRace = races.find((r) => r.id === defenderCiv?.raceId);
@@ -223,7 +282,7 @@ export default function App() {
                 enemyArmy || null,
                 defenderCiv,
                 defenderRace,
-                targetC || cells[army.cellIndex],
+                targetC || simulationCells[army.cellIndex],
                 enemyCity || null
               );
 
@@ -237,7 +296,17 @@ export default function App() {
               }
               if (result.targetCitySacked && enemyCity) {
                 currentCitiesState = currentCitiesState.map((c) =>
-                  c.id === enemyCity.id ? { ...c, population: Math.floor(c.population * 0.5), status: 'under_siege' } : c
+                  c.id === enemyCity.id
+                    ? {
+                        ...c,
+                        population: Math.max(20, Math.floor(c.population * 0.3)),
+                        defense: 0,
+                        status: 'ruined' as const,
+                        ruinedYear: nextYear,
+                        ruinedByCivName: attackerCiv.name,
+                        ruinedByRaceName: attackerRace.name,
+                      }
+                    : c
                 );
               }
 
@@ -370,7 +439,7 @@ export default function App() {
     );
   };
 
-  // Player Action: Cascading Shape Terrain
+  // Player Action: Cascading Shape Terrain (Synchronous Multi-Cell Ring 0 + Outward Perimeter Ripple)
   const handleShapeTerrain = (terrain: TerrainType, scope: ShapingScope = 'cascade') => {
     const baseCost = DAWN_OF_WORLDS_COSTS.shape_land[currentAge];
     const singleCost = calculateShapingCost(baseCost, scope);
@@ -381,32 +450,8 @@ export default function App() {
     const totalCost = calculateMultiCellCost(singleCost, targetIndices.length);
     if (playerDeity.power < totalCost) return;
 
-    let updated = [...cells];
-    let totalAffected = 0;
-    let volcanoCount = 0;
-    let mountainCount = 0;
-    let hillsCount = 0;
-    let plainsCount = 0;
-    let forestCount = 0;
-    let swampCount = 0;
-    let shallowsCount = 0;
-    let oceanCount = 0;
-
-    for (const idx of targetIndices) {
-      const res = applyCascadingTerrainModification(updated, idx, terrain, scope);
-      updated = res.updatedCells;
-      totalAffected += res.summary.totalAffected;
-      volcanoCount += res.summary.volcanoCount;
-      mountainCount += res.summary.mountainCount;
-      hillsCount += res.summary.hillsCount;
-      plainsCount += res.summary.plainsCount;
-      forestCount += res.summary.forestCount;
-      swampCount += res.summary.swampCount;
-      shallowsCount += res.summary.shallowsCount;
-      oceanCount += res.summary.oceanCount;
-    }
-
-    setCells(updated);
+    const res = applyMultiCellCascadingTerrainModification(cells, targetIndices, terrain, scope);
+    setCells(res.updatedCells);
     deductPlayerPower(totalCost);
 
     const firstCell = cells[targetIndices[0]];
@@ -421,14 +466,14 @@ export default function App() {
       actionType: 'Shape Land',
       cost: totalCost,
       title: `${playerDeity.name} Cascaded ${terrain.replace('_', ' ')}${targetIndices.length > 1 ? ` across ${targetIndices.length} blocks` : ''} (${scope.toUpperCase()})`,
-      description: `Wove divine will across ${targetIndices.length} adjacent block${targetIndices.length > 1 ? 's' : ''} (${scope} scope).`,
-      impact: `Transformed ${totalAffected} zones around [${firstCell.lat.toFixed(0)}°, ${firstCell.lon.toFixed(0)}°] (${volcanoCount ? `${volcanoCount} volcano, ` : ''}${mountainCount ? `${mountainCount} mountains, ` : ''}${hillsCount ? `${hillsCount} hills, ` : ''}${plainsCount ? `${plainsCount} plains, ` : ''}${forestCount ? `${forestCount} forests, ` : ''}${swampCount ? `${swampCount} swamps, ` : ''}${shallowsCount ? `${shallowsCount} coastal shallows` : ''}).`,
+      description: `Wove divine will across ${targetIndices.length} adjacent block${targetIndices.length > 1 ? 's' : ''} with primary terrain synchronization and perimeter cascade.`,
+      impact: `Transformed ${res.summary.totalAffected} zones around [${firstCell.lat.toFixed(0)}°, ${firstCell.lon.toFixed(0)}°] (${res.summary.volcanoCount ? `${res.summary.volcanoCount} volcano, ` : ''}${res.summary.mountainCount ? `${res.summary.mountainCount} mountains, ` : ''}${res.summary.hillsCount ? `${res.summary.hillsCount} hills, ` : ''}${res.summary.plainsCount ? `${res.summary.plainsCount} plains, ` : ''}${res.summary.forestCount ? `${res.summary.forestCount} forests, ` : ''}${res.summary.swampCount ? `${res.summary.swampCount} swamps, ` : ''}${res.summary.shallowsCount ? `${res.summary.shallowsCount} coastal shallows` : ''}).`,
       category: 'creation',
     };
     setHistory((prev) => [log, ...prev]);
   };
 
-  // Player Action: Cascading Shape Climate
+  // Player Action: Cascading Shape Climate (Synchronous Multi-Cell Ring 0 + Outward Ripple)
   const handleShapeClimate = (climate: ClimateType, scope: ShapingScope = 'cascade') => {
     const baseCost = DAWN_OF_WORLDS_COSTS.shape_climate[currentAge];
     const singleCost = calculateShapingCost(baseCost, scope);
@@ -439,15 +484,8 @@ export default function App() {
     const totalCost = calculateMultiCellCost(singleCost, targetIndices.length);
     if (playerDeity.power < totalCost) return;
 
-    let updated = [...cells];
-    let lastSummary = '';
-    for (const idx of targetIndices) {
-      const res = applyCascadingClimateModification(updated, idx, climate, scope);
-      updated = res.updatedCells;
-      lastSummary = res.summary;
-    }
-
-    setCells(updated);
+    const res = applyMultiCellCascadingClimateModification(cells, targetIndices, climate, scope);
+    setCells(res.updatedCells);
     deductPlayerPower(totalCost);
 
     const firstCell = cells[targetIndices[0]];
@@ -462,11 +500,217 @@ export default function App() {
       actionType: 'Shape Climate',
       cost: totalCost,
       title: `${playerDeity.name} Channeled ${climate.toUpperCase()} Skies${targetIndices.length > 1 ? ` across ${targetIndices.length} blocks` : ''} (${scope.toUpperCase()})`,
-      description: lastSummary,
-      impact: `Shifted regional climate and moisture across ${targetIndices.length} zones around [${firstCell.lat.toFixed(0)}°, ${firstCell.lon.toFixed(0)}°].`,
+      description: res.summary,
+      impact: `Atmospheric currents modified around [${firstCell.lat.toFixed(0)}°, ${firstCell.lon.toFixed(0)}°].`,
       category: 'creation',
     };
     setHistory((prev) => [log, ...prev]);
+  };
+
+  // Player Action: Divine Reclaim & Rebuild Ruin
+  const handleRebuildRuin = () => {
+    if (!selectedCity || selectedCity.status !== 'ruined') return;
+    const cost = 4;
+    if (playerDeity.power < cost) return;
+
+    deductPlayerPower(cost);
+    setCities((prev) =>
+      prev.map((c) =>
+        c.id === selectedCity.id
+          ? {
+              ...c,
+              status: 'prospering',
+              defense: 2,
+              population: Math.max(150, Math.floor(c.population * 2.5)),
+            }
+          : c
+      )
+    );
+
+    setHistory((prev) => [
+      {
+        id: `rebuild_${Date.now()}`,
+        age: currentAge,
+        round,
+        year,
+        deityId: playerDeity.id,
+        deityName: playerDeity.name,
+        deityColor: playerDeity.color,
+        actionType: 'Purify Civ',
+        cost,
+        title: `${playerDeity.name} Reclaimed & Rebuilt ${selectedCity.name}`,
+        description: `Breathed sacred restorative radiance into the shattered stone and battlements of ${selectedCity.name}, dispelling horrors and restoring the realm to life.`,
+        impact: `Settlement returned to prospering status with reinforced walls.`,
+        category: 'civilization',
+      },
+      ...prev,
+    ]);
+  };
+
+  // Player Action: Race Evolution & Environmental Adaptation
+  const handleEvolveRace = (evolvedRace: Race, targetIndices: number[]) => {
+    const cost = 6;
+    if (playerDeity.power < cost) return;
+
+    deductPlayerPower(cost);
+    setRaces((prev) => [...prev, evolvedRace]);
+
+    // Create subrace civilization or branch
+    const baseCiv = civilizations.find((c) => c.raceId === evolvedRace.parentRaceId);
+    const newCivId = `civ_${evolvedRace.id}_${Date.now()}`;
+    const newCivName = `${evolvedRace.name} Domain`;
+
+    const newCiv: Civilization = {
+      id: newCivId,
+      name: newCivName,
+      raceId: evolvedRace.id,
+      creatorDeityId: playerDeity.id,
+      cityIds: [],
+      capitalCityId: '',
+      color: evolvedRace.color,
+      technologies: baseCiv ? [...baseCiv.technologies] : ['Tribal Totems'],
+      orders: [],
+      alignment: evolvedRace.baseAlignment,
+      diplomacy: {},
+    };
+
+    setCells((prev) =>
+      prev.map((c) => {
+        if (targetIndices.includes(c.index) && c.civilizationId) {
+          return { ...c, civilizationId: newCivId };
+        }
+        return c;
+      })
+    );
+
+    setCities((prev) =>
+      prev.map((city) => {
+        if (targetIndices.includes(city.cellIndex)) {
+          if (!newCiv.capitalCityId) newCiv.capitalCityId = city.id;
+          newCiv.cityIds.push(city.id);
+          return {
+            ...city,
+            raceId: evolvedRace.id,
+            civilizationId: newCivId,
+            alignment: evolvedRace.baseAlignment,
+          };
+        }
+        return city;
+      })
+    );
+
+    setCivilizations((prev) => [...prev, newCiv]);
+
+    setHistory((prev) => [
+      {
+        id: `evolve_${Date.now()}`,
+        age: currentAge,
+        round,
+        year,
+        deityId: playerDeity.id,
+        deityName: playerDeity.name,
+        deityColor: playerDeity.color,
+        actionType: 'Create Subrace',
+        cost,
+        title: `Awakened Subrace Evolution: ${evolvedRace.name}`,
+        description: `${playerDeity.name} guided the divine transmutation of ${evolvedRace.name} adapted for ${evolvedRace.subraceType || 'new environments'}.`,
+        impact: `New race established with procreation rate ${evolvedRace.procreationRate.toFixed(1)}x and expansion inclination ${evolvedRace.expansionInclination.toFixed(2)}.`,
+        category: 'life',
+      },
+      ...prev,
+    ]);
+  };
+
+  // Player Action: 5-Tier Tech Research Breakthrough
+  const handleResearchTech = (civId: string, tech: TechItem, cost: number) => {
+    if (playerDeity.power < cost) return;
+    deductPlayerPower(cost);
+
+    const targetCiv = civilizations.find((c) => c.id === civId);
+    if (!targetCiv) return;
+
+    setCivilizations((prev) =>
+      prev.map((c) =>
+        c.id === civId
+          ? {
+              ...c,
+              technologies: [...c.technologies, tech.name],
+            }
+          : c
+      )
+    );
+
+    setHistory((prev) => [
+      {
+        id: `tech_${Date.now()}`,
+        age: currentAge,
+        round,
+        year,
+        deityId: playerDeity.id,
+        deityName: playerDeity.name,
+        deityColor: playerDeity.color,
+        actionType: 'Advance Civ',
+        cost,
+        title: `Imparted Breakthrough: ${tech.name} (Tier ${tech.tier})`,
+        description: `${playerDeity.name} bestowed knowledge of ${tech.name} upon ${targetCiv.name}. ${tech.description}`,
+        impact: `Tier ${tech.tier} breakthrough mastered by ${targetCiv.name} (${cost} Power expended).`,
+        category: 'civilization',
+      },
+      ...prev,
+    ]);
+  };
+
+  // Player Action: Execute Apocalyptic Catastrophe
+  const handleExecuteCatastrophe = (type: CatastropheType) => {
+    const cost = DAWN_OF_WORLDS_COSTS.catastrophe[currentAge];
+    if (playerDeity.power < cost) return;
+
+    const targetIdx = selectedCellIndex !== null
+      ? selectedCellIndex
+      : Math.floor(cells.length / 2);
+
+    deductPlayerPower(cost);
+    const res = applyCatastropheToWorld(cells, targetIdx, type);
+    setCells(res.updatedCells);
+
+    // If target cell had a city, it is ruined by the catastrophe
+    const targetCell = cells[targetIdx];
+    if (targetCell?.cityId) {
+      setCities((prev) =>
+        prev.map((c) =>
+          c.id === targetCell.cityId
+            ? {
+                ...c,
+                status: 'ruined' as const,
+                defense: 0,
+                population: Math.max(20, Math.floor(c.population * 0.25)),
+                ruinedYear: year,
+                ruinedByCivName: `${type.toUpperCase()} Cataclysm`,
+                ruinedByRaceName: 'Divine Wrath',
+              }
+            : c
+        )
+      );
+    }
+
+    setHistory((prev) => [
+      {
+        id: `catastrophe_${Date.now()}`,
+        age: currentAge,
+        round,
+        year,
+        deityId: playerDeity.id,
+        deityName: playerDeity.name,
+        deityColor: playerDeity.color,
+        actionType: 'Catastrophe',
+        cost,
+        title: `Cataclysm: ${type.toUpperCase()} Unleashed Upon Meglin`,
+        description: res.narrative,
+        impact: `Catastrophic terrain alteration across surrounding world zones.`,
+        category: 'conflict',
+      },
+      ...prev,
+    ]);
   };
 
   // Player Action: Cast / Weave Miracle
@@ -918,16 +1162,22 @@ export default function App() {
     totalDeityCount,
     selectedNpcIds,
     customNpcs,
+    customTechTree,
   }: {
     worldStructure: WorldStructureType;
     playerDeity: Deity;
     totalDeityCount: number;
     selectedNpcIds: string[];
     customNpcs?: Deity[];
+    customTechTree?: Record<TechCategory, TechItem[]>;
   }) => {
     const newCells = generateInitialWorld(worldStructure);
     const newPantheon = buildCustomPantheon(newPlayerDeity, totalDeityCount, selectedNpcIds, customNpcs);
     const newTurnOrder = newPantheon.map((d) => d.id);
+
+    if (customTechTree) {
+      setTechTreeData(customTechTree);
+    }
 
     setCurrentWorldStructure(worldStructure);
     setCells(newCells);
@@ -1053,6 +1303,7 @@ export default function App() {
             cells={cells}
             cities={cities}
             civilizations={civilizations}
+            races={races}
             selectedCellIndex={selectedCellIndex}
             selectedCellIndices={selectedCellIndices}
             onSelectCell={handleSelectCell}
@@ -1061,7 +1312,7 @@ export default function App() {
           />
         )}
 
-        {/* Collapsible Divine Powers Drawer */}
+        {/* Collapsible Divine Powers Drawer (Contained cleanly within main viewport) */}
         <ControlDock
           currentAge={currentAge}
           playerPower={playerDeity.power}
@@ -1070,9 +1321,15 @@ export default function App() {
           onClearSelection={handleClearSelection}
           onOpenRaceSynthesizer={() => setIsRaceModalOpen(true)}
           onOpenMiracleWeaver={() => setIsMiracleModalOpen(true)}
+          onOpenTechTree={() => setIsTechTreeOpen(true)}
+          onOpenRaceEvolution={() => setIsRaceEvolutionOpen(true)}
+          onRebuildRuin={handleRebuildRuin}
+          isRuinSelected={isRuinSelected}
+          ruinedCityName={ruinedCityName}
           onShapeTerrain={handleShapeTerrain}
           onShapeClimate={handleShapeClimate}
           onExecuteAction={handleExecuteGeneralAction}
+          onExecuteCatastrophe={handleExecuteCatastrophe}
         />
       </main>
 
@@ -1153,6 +1410,28 @@ export default function App() {
         onOfferPact={handleOfferPact}
         onProvokeRival={handleProvokeRival}
         onBestowTribute={handleBestowTribute}
+      />
+
+      <RaceEvolutionModal
+        isOpen={isRaceEvolutionOpen}
+        onClose={() => setIsRaceEvolutionOpen(false)}
+        playerPower={playerDeity.power}
+        races={races}
+        civilizations={civilizations}
+        cells={cells}
+        selectedCellIndex={selectedCellIndex}
+        currentAge={currentAge}
+        onEvolveRace={handleEvolveRace}
+      />
+
+      <TechTreeModal
+        isOpen={isTechTreeOpen}
+        onClose={() => setIsTechTreeOpen(false)}
+        playerPower={playerDeity.power}
+        civilizations={civilizations}
+        playerCivilization={civilizations.find((c) => c.creatorDeityId === playerDeity.id) || null}
+        races={races}
+        onResearchTech={handleResearchTech}
       />
     </div>
   );

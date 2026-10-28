@@ -33,6 +33,13 @@ import {
   Wand2,
 } from 'lucide-react';
 
+import {
+  DEFAULT_TECH_TREE,
+  TECH_CATEGORIES,
+  TechCategory,
+  TechItem,
+} from '../simulation/techTree';
+
 interface NewGameModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -42,6 +49,7 @@ interface NewGameModalProps {
     totalDeityCount: number;
     selectedNpcIds: string[];
     customNpcs?: Deity[];
+    customTechTree?: Record<TechCategory, TechItem[]>;
   }) => void;
 }
 
@@ -92,6 +100,11 @@ export const NewGameModal: React.FC<NewGameModalProps> = ({
   // User-created or rolled custom deities
   const [customNpcs, setCustomNpcs] = useState<Deity[]>([]);
 
+  // Navigation tabs between World & Pantheon and 5-Tier Tech Trees
+  const [activeMainTab, setActiveMainTab] = useState<'world_pantheon' | 'tech_trees'>('world_pantheon');
+  const [techTreeData, setTechTreeData] = useState<Record<TechCategory, TechItem[]>>(DEFAULT_TECH_TREE);
+  const [activeTechCategory, setActiveTechCategory] = useState<TechCategory>('combat');
+
   // Active view in deity selection section
   const [pantheonTab, setPantheonTab] = useState<'precanned' | 'pairs' | 'generator'>('precanned');
 
@@ -105,6 +118,24 @@ export const NewGameModal: React.FC<NewGameModalProps> = ({
   const [customHarmony, setCustomHarmony] = useState(0.6);
   const [customExpansion, setCustomExpansion] = useState(0.5);
   const [customCuriosity, setCustomCuriosity] = useState(0.85);
+
+  const handleUpdateTechName = (category: TechCategory, techId: string, newName: string) => {
+    setTechTreeData((prev) => ({
+      ...prev,
+      [category]: prev[category].map((item) => (item.id === techId ? { ...item, name: newName } : item)),
+    }));
+  };
+
+  const handleUpdateTechDesc = (category: TechCategory, techId: string, newDesc: string) => {
+    setTechTreeData((prev) => ({
+      ...prev,
+      [category]: prev[category].map((item) => (item.id === techId ? { ...item, description: newDesc } : item)),
+    }));
+  };
+
+  const handleResetTechTrees = () => {
+    setTechTreeData(DEFAULT_TECH_TREE);
+  };
 
   if (!isOpen) return null;
 
@@ -251,6 +282,7 @@ export const NewGameModal: React.FC<NewGameModalProps> = ({
       totalDeityCount,
       selectedNpcIds,
       customNpcs,
+      customTechTree: techTreeData,
     });
     onClose();
   };
@@ -283,14 +315,44 @@ export const NewGameModal: React.FC<NewGameModalProps> = ({
           </button>
         </div>
 
+        {/* Navigation Tabs */}
+        <div className="flex items-center gap-2 px-6 py-2 bg-slate-950/60 border-b border-slate-800 shrink-0">
+          <button
+            type="button"
+            onClick={() => setActiveMainTab('world_pantheon')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition ${
+              activeMainTab === 'world_pantheon'
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5" />
+            1. World & Pantheon Setup
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveMainTab('tech_trees')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-2 transition ${
+              activeMainTab === 'tech_trees'
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" />
+            2. 5-Tier Tech Trees (Customizable)
+          </button>
+        </div>
+
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
-          {/* 1. World Structure Archetype Selection */}
-          <div className="space-y-2">
-            <label className="text-sm font-bold font-serif text-amber-300 flex items-center gap-1.5">
-              <Compass className="w-4 h-4 text-amber-400" /> 1. Select World Structure Archetype
-            </label>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
+          {activeMainTab === 'world_pantheon' ? (
+            <>
+              {/* 1. World Structure Archetype Selection */}
+              <div className="space-y-2">
+                <label className="text-sm font-bold font-serif text-amber-300 flex items-center gap-1.5">
+                  <Compass className="w-4 h-4 text-amber-400" /> 1. Select World Structure Archetype
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
               {[
                 {
                   id: 'continental' as WorldStructureType,
@@ -941,6 +1003,97 @@ export const NewGameModal: React.FC<NewGameModalProps> = ({
               </div>
             </div>
           </div>
+            </>
+          ) : (
+            <div className="space-y-6 animate-fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+                <div>
+                  <h3 className="text-sm font-bold text-amber-300 font-serif flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-amber-400" /> 5-Tier Technological Advancement Trees
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">
+                    Pre-define & customize the civilizational breakthroughs across all domains. Mortals progress sequentially or can skip tiers at 1.5× Power.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleResetTechTrees}
+                  className="self-start sm:self-auto px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs border border-slate-700 font-medium transition"
+                >
+                  Reset to Defaults
+                </button>
+              </div>
+
+              {/* Category tabs */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {Object.values(TECH_CATEGORIES).map((cat) => (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => setActiveTechCategory(cat.id)}
+                    className={`p-3 rounded-xl border text-left transition flex flex-col gap-1 ${
+                      activeTechCategory === cat.id
+                        ? 'bg-amber-500/15 border-amber-500/50 text-amber-300 shadow-md'
+                        : 'bg-slate-950/40 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                    }`}
+                  >
+                    <div className="font-bold text-xs flex items-center gap-1.5">
+                      <span>{cat.icon}</span>
+                      <span>{cat.name}</span>
+                    </div>
+                    <div className="text-[10px] text-slate-500 leading-tight">
+                      {cat.description}
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Tiers for selected category */}
+              <div className="space-y-3">
+                <div className="text-xs font-semibold text-slate-300 flex items-center justify-between">
+                  <span>Advancement Tiers: {TECH_CATEGORIES[activeTechCategory]?.name}</span>
+                  <span className="text-[11px] text-amber-400/80 bg-amber-950/40 px-2.5 py-0.5 rounded border border-amber-800/40 font-mono">
+                    Tier skipping cost multiplier: 1.5×
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 gap-2.5">
+                  {techTreeData[activeTechCategory].map((tech) => (
+                    <div
+                      key={tech.id}
+                      className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800/80 flex flex-col sm:flex-row sm:items-center gap-3"
+                    >
+                      <div className="flex sm:flex-col items-center justify-center min-w-[75px] px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-center shrink-0">
+                        <span className="text-amber-400 font-bold text-xs">Tier {tech.tier}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">{tech.baseCost} Pts</span>
+                      </div>
+
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider shrink-0 w-12">Name:</label>
+                          <input
+                            type="text"
+                            value={tech.name}
+                            onChange={(e) => handleUpdateTechName(activeTechCategory, tech.id, e.target.value)}
+                            className="flex-1 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-white font-semibold text-xs focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider shrink-0 w-12">Desc:</label>
+                          <input
+                            type="text"
+                            value={tech.description}
+                            onChange={(e) => handleUpdateTechDesc(activeTechCategory, tech.id, e.target.value)}
+                            className="flex-1 px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 text-xs focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Modal Footer */}

@@ -140,22 +140,39 @@ export const TopStatusBar: React.FC<TopStatusBarProps> = ({
 
           <div className="w-[1px] h-4 bg-slate-700 mx-1" />
 
-          {/* Toggle 3D Globe vs 2D Atlas */}
-          <button
+          {/* Slider Style Toggle: 2D World Atlas <--> 3D Globe */}
+          <div
             onClick={onToggle3DMode}
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 border border-slate-700 transition whitespace-nowrap"
-            title="Toggle between 3D Globe and 2D Tabletop Atlas"
+            className="relative flex items-center bg-slate-950 p-0.5 rounded-xl border border-slate-700/80 cursor-pointer select-none text-[11px] font-semibold transition"
+            role="switch"
+            aria-checked={is3DMode}
+            title="Slide between 2D Cartographer's Atlas and 3D Spherical Globe"
           >
-            {is3DMode ? (
-              <>
-                <Globe className="w-3.5 h-3.5 text-cyan-400" /> 3D Globe
-              </>
-            ) : (
-              <>
-                <Map className="w-3.5 h-3.5 text-amber-400" /> 2D Atlas
-              </>
-            )}
-          </button>
+            {/* Sliding Pill Indicator */}
+            <div
+              className={`absolute top-0.5 bottom-0.5 w-[76px] rounded-lg transition-all duration-300 ease-out shadow-md ${
+                !is3DMode
+                  ? 'left-0.5 bg-gradient-to-r from-amber-600 to-yellow-600 text-slate-950 shadow-amber-500/25'
+                  : 'left-[79px] bg-gradient-to-r from-cyan-600 to-blue-600 text-white shadow-cyan-500/25'
+              }`}
+            />
+            <span
+              className={`relative z-10 w-[76px] py-1 text-center flex items-center justify-center gap-1.5 transition-colors duration-200 ${
+                !is3DMode ? 'text-slate-950 font-black' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Map className={`w-3.5 h-3.5 ${!is3DMode ? 'text-slate-950' : 'text-amber-400'}`} />
+              <span>2D Atlas</span>
+            </span>
+            <span
+              className={`relative z-10 w-[76px] py-1 text-center flex items-center justify-center gap-1.5 transition-colors duration-200 ${
+                is3DMode ? 'text-white font-black' : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Globe className={`w-3.5 h-3.5 ${is3DMode ? 'text-white' : 'text-cyan-400'}`} />
+              <span>3D Globe</span>
+            </span>
+          </div>
         </div>
 
         {/* Right: Player Power & Turn Execution + Pantheon & Chronicles */}

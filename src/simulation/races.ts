@@ -36,6 +36,10 @@ export const PRESET_RACES: Race[] = [
     baseAlignment: 0,
     militaryBonus: 1,
     fertilityMultiplier: 1.2,
+    procreationRate: 1.2, // Balanced steady procreation
+    expansionInclination: 0.6, // Balanced expansion
+    settlementTendency: 0.6, // Steady town creation
+    naturalWonderAffinity: false,
     techAffinity: 1.25,
     color: '#60a5fa', // Blue
   },
@@ -47,7 +51,7 @@ export const PRESET_RACES: Race[] = [
     parentRaceId: null,
     category: 'civilized',
     description:
-      'Graceful, long-lived scholars deeply intertwined with primordial forests, possessing innate arcane sensitivities.',
+      'Graceful, long-lived scholars deeply intertwined with primordial forests, possessing innate arcane sensitivities. Reclusive, expanding slowly and strategically around sacred wonders.',
     traits: ['Arcane Affinity', 'Immortal Memory', 'Forest Dwellers'],
     physiology: {
       carapaceOrSkin: 'Fair / Silken Epidermis',
@@ -62,6 +66,10 @@ export const PRESET_RACES: Race[] = [
     baseAlignment: 1,
     militaryBonus: 1,
     fertilityMultiplier: 0.8,
+    procreationRate: 0.6, // Reverent slow procreation
+    expansionInclination: 0.2, // Reclusive, slow strategic expansion
+    settlementTendency: 0.2, // Few settlements, only around natural wonders/sacred groves
+    naturalWonderAffinity: true, // Gravitates toward Sacred Groves and Arcane Mana Springs
     techAffinity: 1.4,
     color: '#34d399', // Emerald
   },
@@ -88,6 +96,10 @@ export const PRESET_RACES: Race[] = [
     baseAlignment: 1,
     militaryBonus: 2,
     fertilityMultiplier: 0.9,
+    procreationRate: 0.85,
+    expansionInclination: 0.45,
+    settlementTendency: 0.5,
+    naturalWonderAffinity: false,
     techAffinity: 1.3,
     color: '#fbbf24', // Amber Gold
   },
@@ -114,6 +126,10 @@ export const PRESET_RACES: Race[] = [
     baseAlignment: 1,
     militaryBonus: 0,
     fertilityMultiplier: 1.45,
+    procreationRate: 1.4,
+    expansionInclination: 0.35,
+    settlementTendency: 0.5,
+    naturalWonderAffinity: false,
     techAffinity: 1.1,
     color: '#a78bfa', // Lavender
   },
@@ -125,7 +141,7 @@ export const PRESET_RACES: Race[] = [
     parentRaceId: null,
     category: 'monstrous',
     description:
-      'Imposing, ferocious warrior clans endowed with savage physical might, blood fury, and uncompromising martial honor.',
+      'Imposing, ferocious warrior clans endowed with savage physical might, blood fury, and relentless territorial expansion.',
     traits: ['Blood Fury', 'Iron Constitution', 'Honor Bound'],
     physiology: {
       carapaceOrSkin: 'Thick Scaled Reptilian Plates',
@@ -140,6 +156,10 @@ export const PRESET_RACES: Race[] = [
     baseAlignment: -1,
     militaryBonus: 3,
     fertilityMultiplier: 1.3,
+    procreationRate: 1.8, // Rapid procreation
+    expansionInclination: 0.9, // Aggressive territorial expansion
+    settlementTendency: 0.75, // Prolific war camps and garrisons
+    naturalWonderAffinity: false,
     techAffinity: 0.8,
     color: '#f87171', // Crimson
   },
@@ -151,7 +171,7 @@ export const PRESET_RACES: Race[] = [
     parentRaceId: null,
     category: 'monstrous',
     description:
-      'Prolific, eccentric subterranean tricksters and scavengers who craft erratic clockwork contraptions and thrive in sunken caverns.',
+      'Prolific, eccentric subterranean tricksters and scavengers with extreme breeding rates who swarm out in massive aggressive warrens.',
     traits: ['Prolific Breeders', 'Cunning Tinkerers', 'Subterranean'],
     physiology: {
       carapaceOrSkin: 'Weathered Leathery Hide',
@@ -166,6 +186,10 @@ export const PRESET_RACES: Race[] = [
     baseAlignment: -1,
     militaryBonus: 0,
     fertilityMultiplier: 1.7,
+    procreationRate: 2.2, // Swarming prolific procreation
+    expansionInclination: 0.95, // Highly aggressive swarming expansion
+    settlementTendency: 0.85, // Frequent warrens and scrapper camps
+    naturalWonderAffinity: false,
     techAffinity: 1.15,
     color: '#a3e635', // Lime
   },
@@ -192,6 +216,10 @@ export const PRESET_RACES: Race[] = [
     baseAlignment: 0,
     militaryBonus: 1,
     fertilityMultiplier: 1.4,
+    procreationRate: 1.6,
+    expansionInclination: 0.75,
+    settlementTendency: 0.7,
+    naturalWonderAffinity: false,
     techAffinity: 0.95,
     color: '#fb923c', // Orange
   },
@@ -218,6 +246,10 @@ export const PRESET_RACES: Race[] = [
     baseAlignment: -1,
     militaryBonus: 2,
     fertilityMultiplier: 1.35,
+    procreationRate: 1.3,
+    expansionInclination: 0.5,
+    settlementTendency: 0.45,
+    naturalWonderAffinity: false,
     techAffinity: 0.7,
     color: '#84cc16', // Olive Green
   },
@@ -244,6 +276,10 @@ export const PRESET_RACES: Race[] = [
     baseAlignment: -1,
     militaryBonus: 3,
     fertilityMultiplier: 0.6,
+    procreationRate: 0.5,
+    expansionInclination: 0.7,
+    settlementTendency: 0.4,
+    naturalWonderAffinity: false,
     techAffinity: 1.1,
     color: '#cbd5e1', // Slate White
   },
@@ -270,6 +306,10 @@ export const PRESET_RACES: Race[] = [
     baseAlignment: -1,
     militaryBonus: 3,
     fertilityMultiplier: 1.6,
+    procreationRate: 2.0,
+    expansionInclination: 0.9,
+    settlementTendency: 0.8,
+    naturalWonderAffinity: false,
     techAffinity: 0.85,
     color: '#e11d48', // Blood Red
   },
