@@ -23,6 +23,7 @@ import {
   TradeRoute,
   WorldCell,
   WorldStructureType,
+  MapSizeType,
   SavedGameSlot,
 } from './types/game';
 import {
@@ -127,7 +128,7 @@ export default function App() {
         if (prev.includes(cellIndex)) return prev;
         if (prev.length === 0) return [cellIndex];
         // Allow selection of adjacent (or diagonally adjacent) blocks
-        const isAdjacent = prev.some((existingIdx) => areCellsAdjacent(existingIdx, cellIndex));
+        const isAdjacent = prev.some((existingIdx) => areCellsAdjacent(existingIdx, cellIndex, cells.length));
         if (isAdjacent) {
           return [...prev, cellIndex];
         }
@@ -149,6 +150,8 @@ export default function App() {
   const [mapViewMode, setMapViewMode] = useState<MapViewMode>('physical');
   const [is3DMode, setIs3DMode] = useState<boolean>(false);
   const [currentWorldStructure, setCurrentWorldStructure] = useState<WorldStructureType>('continental');
+  const [mapSize, setMapSize] = useState<MapSizeType>('medium');
+  const [worldSeed, setWorldSeed] = useState<string>('Genesis-Prime');
 
   const [isRaceModalOpen, setIsRaceModalOpen] = useState(false);
   const [isMiracleModalOpen, setIsMiracleModalOpen] = useState(false);
@@ -1163,6 +1166,8 @@ export default function App() {
   // Start New Game Handler
   const handleStartNewGame = ({
     worldStructure,
+    mapSize: newMapSize,
+    worldSeed: newWorldSeed,
     playerDeity: newPlayerDeity,
     totalDeityCount,
     selectedNpcIds,
@@ -1170,13 +1175,15 @@ export default function App() {
     customTechTree,
   }: {
     worldStructure: WorldStructureType;
+    mapSize: MapSizeType;
+    worldSeed: string;
     playerDeity: Deity;
     totalDeityCount: number;
     selectedNpcIds: string[];
     customNpcs?: Deity[];
     customTechTree?: Record<TechCategory, TechItem[]>;
   }) => {
-    const newCells = generateInitialWorld(worldStructure);
+    const newCells = generateInitialWorld(worldStructure, newMapSize, newWorldSeed);
     const newPantheon = buildCustomPantheon(newPlayerDeity, totalDeityCount, selectedNpcIds, customNpcs);
     const newTurnOrder = newPantheon.map((d) => d.id);
 
@@ -1184,6 +1191,8 @@ export default function App() {
       setTechTreeData(customTechTree);
     }
 
+    setMapSize(newMapSize);
+    setWorldSeed(newWorldSeed);
     setCurrentWorldStructure(worldStructure);
     setCells(newCells);
     setDeities(newPantheon);
@@ -1214,7 +1223,7 @@ export default function App() {
         actionType: 'Cosmic Genesis',
         cost: 0,
         title: `The Cosmic Genesis of ${newPlayerDeity.name}`,
-        description: `${newPlayerDeity.name} awoke in the celestial void alongside a council of ${totalDeityCount - 1} immortal rivals to sculpt a ${worldStructure} world.`,
+        description: `${newPlayerDeity.name} awoke in the celestial void alongside a council of ${totalDeityCount - 1} immortal rivals to sculpt a ${worldStructure} world (${newMapSize} scale, ${newCells.length} blocks, seed: "${newWorldSeed}").`,
         impact: 'The First Age of Land commenced.',
         category: 'creation',
       },
@@ -1240,6 +1249,8 @@ export default function App() {
     setYear(slot.year);
     setHistory(slot.history || []);
     if (slot.worldStructure) setCurrentWorldStructure(slot.worldStructure);
+    if (slot.mapSize) setMapSize(slot.mapSize);
+    if (slot.worldSeed) setWorldSeed(slot.worldSeed);
     if (slot.mapViewMode) setMapViewMode(slot.mapViewMode);
     if (typeof slot.is3DMode === 'boolean') setIs3DMode(slot.is3DMode);
 
@@ -1361,6 +1372,8 @@ export default function App() {
           playerDeityTitle: playerDeity.title,
           deityCount: deities.length,
           worldStructure: currentWorldStructure,
+          mapSize,
+          worldSeed,
           cells,
           cities,
           civilizations,

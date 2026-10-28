@@ -341,6 +341,8 @@ export type WorldStructureType =
   | 'shattered'
   | 'waterworld';
 
+export type MapSizeType = 'small' | 'medium' | 'large' | 'extra_large';
+
 export interface SavedGameSlot {
   id: string;
   saveName: string;
@@ -353,6 +355,8 @@ export interface SavedGameSlot {
   playerDeityTitle: string;
   deityCount: number;
   worldStructure: WorldStructureType;
+  worldSeed?: string;
+  mapSize?: MapSizeType;
   cells: WorldCell[];
   cities: City[];
   civilizations: Civilization[];

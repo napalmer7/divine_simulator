@@ -5,7 +5,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { City, Civilization, MapViewMode, Race, WorldCell } from '../types/game';
-import { GRID_COLS, GRID_ROWS } from '../simulation/worldGrid';
+import { getGridDimensions } from '../simulation/worldGrid';
 import { PRESET_RACES } from '../simulation/races';
 import { RaceArtwork } from './RaceArtwork';
 import {
@@ -81,6 +81,7 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
   onClearSelection,
   viewMode,
 }) => {
+  const { rows: gridRows, cols: gridCols } = getGridDimensions(cells.length);
   const [hoveredCellIndex, setHoveredCellIndex] = useState<number | null>(null);
   const [showResourceOverlay, setShowResourceOverlay] = useState<boolean>(true);
   const [isDraggingSelection, setIsDraggingSelection] = useState<boolean>(false);
@@ -169,14 +170,14 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
     const targetCell = cells.find((c) => c.index === city.cellIndex);
     if (!targetCell) return { top: '5%', left: '5%' };
 
-    const col = targetCell.index % GRID_COLS;
-    const row = Math.floor(targetCell.index / GRID_COLS);
+    const col = targetCell.index % gridCols;
+    const row = Math.floor(targetCell.index / gridCols);
 
-    const isRight = col > 24;
-    const isBottom = row > 12;
+    const isRight = col > gridCols / 2;
+    const isBottom = row > gridRows / 2;
 
-    const leftPercent = ((col + 0.5) / GRID_COLS) * 100;
-    const topPercent = ((row + 0.5) / GRID_ROWS) * 100;
+    const leftPercent = ((col + 0.5) / gridCols) * 100;
+    const topPercent = ((row + 0.5) / gridRows) * 100;
 
     const style: React.CSSProperties = {
       position: 'absolute',
@@ -225,7 +226,7 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
               <Compass className="w-4 h-4 text-amber-400" /> Cartographer's Table: 2D World Atlas
             </div>
             <div className="text-[11px] text-amber-300/70 font-mono">
-              Equirectangular Projection • {GRID_ROWS} Latitudinal Bands × {GRID_COLS} Meridians
+              Equirectangular Projection • {gridRows} Latitudinal Bands × {gridCols} Meridians ({cells.length} Blocks)
             </div>
           </div>
 
@@ -333,7 +334,7 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
           <div
             className="grid gap-[1px] bg-amber-950/50 rounded-xl overflow-hidden select-none border border-amber-900/50 shadow-inner w-full"
             style={{
-              gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
+              gridTemplateColumns: `repeat(${gridCols}, minmax(0, 1fr))`,
               aspectRatio: '2 / 1',
               maxHeight: sizeMode === 'fullscreen' ? 'calc(100vh - 200px)' : undefined,
             }}

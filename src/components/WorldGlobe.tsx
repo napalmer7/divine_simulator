@@ -19,6 +19,7 @@ import {
 import {
   GRID_COLS,
   GRID_ROWS,
+  getGridDimensions,
   latLonToVector3,
   cellIndexToVector3,
 } from '../simulation/worldGrid';
@@ -62,15 +63,16 @@ function getPointOnSphere(u: number, v: number, radius: number): THREE.Vector3 {
 /**
  * Creates curved spherical quad surface mesh geometry matching the exact cell's boundaries on the globe
  */
-function createCellSegmentGeometry(cellIndex: number, radius: number): THREE.BufferGeometry {
-  const r = Math.floor(cellIndex / GRID_COLS);
-  const c = cellIndex % GRID_COLS;
+function createCellSegmentGeometry(cellIndex: number, radius: number, totalCells?: number): THREE.BufferGeometry {
+  const { rows, cols } = getGridDimensions(totalCells);
+  const r = Math.floor(cellIndex / cols);
+  const c = cellIndex % cols;
   const segments = 4; // 4x4 subdivision curves seamlessly to the sphere surface
 
-  const uMin = c / GRID_COLS;
-  const uMax = (c + 1) / GRID_COLS;
-  const vMin = r / GRID_ROWS;
-  const vMax = (r + 1) / GRID_ROWS;
+  const uMin = c / cols;
+  const uMax = (c + 1) / cols;
+  const vMin = r / rows;
+  const vMax = (r + 1) / rows;
 
   const positions: number[] = [];
   const indices: number[] = [];
@@ -115,15 +117,16 @@ function createCellSegmentGeometry(cellIndex: number, radius: number): THREE.Buf
 /**
  * Creates curved spherical perimeter line loop geometry matching the exact borders of the world segment
  */
-function createCellOutlineGeometry(cellIndex: number, radius: number): THREE.BufferGeometry {
-  const r = Math.floor(cellIndex / GRID_COLS);
-  const c = cellIndex % GRID_COLS;
+function createCellOutlineGeometry(cellIndex: number, radius: number, totalCells?: number): THREE.BufferGeometry {
+  const { rows, cols } = getGridDimensions(totalCells);
+  const r = Math.floor(cellIndex / cols);
+  const c = cellIndex % cols;
   const segments = 4;
 
-  const uMin = c / GRID_COLS;
-  const uMax = (c + 1) / GRID_COLS;
-  const vMin = r / GRID_ROWS;
-  const vMax = (r + 1) / GRID_ROWS;
+  const uMin = c / cols;
+  const uMax = (c + 1) / cols;
+  const vMin = r / rows;
+  const vMax = (r + 1) / rows;
 
   const points: THREE.Vector3[] = [];
 
@@ -228,18 +231,18 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
   useEffect(() => {
     const ctx = textureCanvas.getContext('2d');
     if (!ctx || cells.length === 0) return;
-
+    const { rows: gridRows, cols: gridCols } = getGridDimensions(cells.length);
     const w = textureCanvas.width;
     const h = textureCanvas.height;
-    const cellW = w / GRID_COLS;
-    const cellH = h / GRID_ROWS;
+    const cellW = w / gridCols;
+    const cellH = h / gridRows;
 
     ctx.clearRect(0, 0, w, h);
 
     // Draw base cells
-    for (let r = 0; r < GRID_ROWS; r++) {
-      for (let c = 0; c < GRID_COLS; c++) {
-        const idx = r * GRID_COLS + c;
+    for (let r = 0; r < gridRows; r++) {
+      for (let c = 0; c < gridCols; c++) {
+        const idx = r * gridCols + c;
         const cell = cells[idx];
         if (!cell) continue;
 
@@ -694,7 +697,7 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
 
     // 4. Render Territorial Conflicts (Crossed Sword beacons)
     conflicts.forEach((conflict) => {
-      const [x, y, z] = cellIndexToVector3(conflict.cellIndex, GLOBE_RADIUS + 0.05);
+      const [x, y, z] = cellIndexToVector3(conflict.cellIndex, GLOBE_RADIUS + 0.05, cells.length);
       const normal = new THREE.Vector3(x, y, z).normalize();
 
       const confGroup = new THREE.Group();
@@ -771,10 +774,11 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
     // false = do NOT test child meshes (selectionMarker, hoverMarker, markersGroup), only the globe sphere
     const intersects = raycaster.intersectObject(globeMeshRef.current, false);
     if (intersects.length > 0 && intersects[0].uv) {
+      const { rows: gridRows, cols: gridCols } = getGridDimensions(cells.length);
       const uv = intersects[0].uv;
-      const c = Math.floor(Math.min(0.99999, Math.max(0, uv.x)) * GRID_COLS);
-      const r = Math.floor(Math.min(0.99999, Math.max(0, 1 - uv.y)) * GRID_ROWS);
-      return Math.max(0, Math.min(cells.length - 1, r * GRID_COLS + c));
+      const c = Math.floor(Math.min(0.99999, Math.max(0, uv.x)) * gridCols);
+      const r = Math.floor(Math.min(0.99999, Math.max(0, 1 - uv.y)) * gridRows);
+      return Math.max(0, Math.min(cells.length - 1, r * gridCols + c));
     }
     return null;
   };
@@ -818,12 +822,12 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
     // Create an exact curved spherical quad mesh and outline for each selected block
     effectiveSelection.forEach((cellIdx) => {
       if (!cells[cellIdx]) return;
-      const geo = createCellSegmentGeometry(cellIdx, GLOBE_RADIUS + 0.009);
+      const geo = createCellSegmentGeometry(cellIdx, GLOBE_RADIUS + 0.009, cells.length);
       const mesh = new THREE.Mesh(geo, meshMat);
       mesh.raycast = () => {};
       selGroup.add(mesh);
 
-      const lineGeo = createCellOutlineGeometry(cellIdx, GLOBE_RADIUS + 0.012);
+      const lineGeo = createCellOutlineGeometry(cellIdx, GLOBE_RADIUS + 0.012, cells.length);
       const line = new THREE.Line(lineGeo, lineMat);
       line.raycast = () => {};
       selGroup.add(line);
@@ -901,8 +905,8 @@ export const WorldGlobe: React.FC<WorldGlobeProps> = ({
             hoverMeshRef.current.geometry.dispose();
             hoverLineRef.current.geometry.dispose();
 
-            hoverMeshRef.current.geometry = createCellSegmentGeometry(cellIdx, GLOBE_RADIUS + 0.006);
-            hoverLineRef.current.geometry = createCellOutlineGeometry(cellIdx, GLOBE_RADIUS + 0.008);
+            hoverMeshRef.current.geometry = createCellSegmentGeometry(cellIdx, GLOBE_RADIUS + 0.006, cells.length);
+            hoverLineRef.current.geometry = createCellOutlineGeometry(cellIdx, GLOBE_RADIUS + 0.008, cells.length);
             hoverMarkerRef.current.visible = true;
           }
         }

@@ -3,11 +3,105 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { ClimateType, TerrainType, WorldCell, WorldStructureType } from '../types/game';
+import { ClimateType, MapSizeType, TerrainType, WorldCell, WorldStructureType } from '../types/game';
 
 export const GRID_ROWS = 24; // Latitude divisions (-80 to +80)
 export const GRID_COLS = 48; // Longitude divisions (-180 to +180)
-export const TOTAL_CELLS = GRID_ROWS * GRID_COLS; // 1,152 cells
+export const TOTAL_CELLS = GRID_ROWS * GRID_COLS; // 1,152 cells (Medium default)
+
+export type { MapSizeType };
+
+export interface MapSizeConfig {
+  id: MapSizeType;
+  name: string;
+  rows: number;
+  cols: number;
+  totalCells: number;
+  description: string;
+}
+
+export const MAP_SIZES: Record<MapSizeType, MapSizeConfig> = {
+  small: {
+    id: 'small',
+    name: 'Small (16 × 32)',
+    rows: 16,
+    cols: 32,
+    totalCells: 512,
+    description: '512 Blocks • Swift, concentrated divine theater & immediate rival friction',
+  },
+  medium: {
+    id: 'medium',
+    name: 'Medium (24 × 48)',
+    rows: 24,
+    cols: 48,
+    totalCells: 1152,
+    description: '1,152 Blocks • Canonical balanced Genesis scale',
+  },
+  large: {
+    id: 'large',
+    name: 'Large (32 × 64)',
+    rows: 32,
+    cols: 64,
+    totalCells: 2048,
+    description: '2,048 Blocks • Expansive continents, deeper frontiers, distant wildlands',
+  },
+  extra_large: {
+    id: 'extra_large',
+    name: 'Extra Large (40 × 80)',
+    rows: 40,
+    cols: 80,
+    totalCells: 3200,
+    description: '3,200 Blocks • Colossal planetary scale, vast oceans, massive empires',
+  },
+};
+
+/**
+ * Derives rows and columns from cell count or defaults to medium
+ */
+export function getGridDimensions(cellCount?: number): { rows: number; cols: number } {
+  if (cellCount === 512) return { rows: 16, cols: 32 };
+  if (cellCount === 2048) return { rows: 32, cols: 64 };
+  if (cellCount === 3200) return { rows: 40, cols: 80 };
+  return { rows: 24, cols: 48 }; // Default Medium
+}
+
+/**
+ * Deterministic pseudo-random number generator (Mulberry32) seeded by string or number
+ */
+export function createSeededRandom(seedInput: string | number): () => number {
+  let seed = 0;
+  if (typeof seedInput === 'number') {
+    seed = Math.floor(seedInput) || 13371337;
+  } else if (typeof seedInput === 'string') {
+    for (let i = 0; i < seedInput.length; i++) {
+      seed = (seed << 5) - seed + seedInput.charCodeAt(i);
+      seed |= 0;
+    }
+  }
+  if (seed === 0) seed = 13371337;
+
+  return function () {
+    let t = (seed += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/**
+ * Generate a thematic random seed name
+ */
+export function generateRandomSeed(): string {
+  const prefixes = [
+    'Genesis', 'Cosmos', 'Aethel', 'Titan', 'Avalon', 'Meglin',
+    'Solaria', 'Elysium', 'Valkyrie', 'Zephyr', 'Tartarus', 'Hyperion',
+    'Olympus', 'Pangaea', 'Chrono', 'Aether', 'Oceana', 'Midgard',
+    'Astral', 'Nirvana', 'Eldoria', 'Arcadia', 'Mythos', 'Vanguard',
+  ];
+  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+  const num = Math.floor(100 + Math.random() * 900);
+  return `${prefix}-${num}`;
+}
 
 export const RESOURCES_LIST = [
   'Iron Ore Deposits',
@@ -39,11 +133,12 @@ export function latLonToVector3(latDeg: number, lonDeg: number, radius = 1): [nu
 /**
  * Direct exact conversion from cellIndex to 3D spherical coordinates matching Three.js SphereGeometry
  */
-export function cellIndexToVector3(cellIndex: number, radius = 1): [number, number, number] {
-  const r = Math.floor(cellIndex / GRID_COLS);
-  const c = cellIndex % GRID_COLS;
-  const u = (c + 0.5) / GRID_COLS;
-  const v = (r + 0.5) / GRID_ROWS;
+export function cellIndexToVector3(cellIndex: number, radius = 1, totalCells = TOTAL_CELLS): [number, number, number] {
+  const { rows, cols } = getGridDimensions(totalCells);
+  const r = Math.floor(cellIndex / cols);
+  const c = cellIndex % cols;
+  const u = (c + 0.5) / cols;
+  const v = (r + 0.5) / rows;
 
   const phi = v * Math.PI;
   const theta = u * 2 * Math.PI;
@@ -90,7 +185,7 @@ export function computeTerrain(elevation: number, moisture: number, climate: Cli
 }
 
 /**
- * Generate the initial nascent world based on selected WorldStructureType:
+ * Generate the initial nascent world based on selected WorldStructureType, MapSizeType, and seed.
  * - 'continental': Organic dual continents + island chains
  * - 'pangea': Singular grand supercontinent with mountain spine surrounded by world ocean
  * - 'archipelago': Vast maritime archipelagos and scattered atolls
@@ -99,18 +194,82 @@ export function computeTerrain(elevation: number, moisture: number, climate: Cli
  */
 export function generateInitialWorld(
   worldStructure: WorldStructureType = 'continental',
-  seedOffset = 0
+  mapSizeOrSeed: MapSizeType | number | string = 'medium',
+  customSeed?: string | number
 ): WorldCell[] {
+  let mapSize: MapSizeType = 'medium';
+  let seedValue: string | number;
+
+  if (
+    mapSizeOrSeed === 'small' ||
+    mapSizeOrSeed === 'medium' ||
+    mapSizeOrSeed === 'large' ||
+    mapSizeOrSeed === 'extra_large'
+  ) {
+    mapSize = mapSizeOrSeed;
+    seedValue = customSeed !== undefined ? customSeed : generateRandomSeed();
+  } else {
+    seedValue = mapSizeOrSeed;
+  }
+
+  const { rows, cols } = MAP_SIZES[mapSize] || MAP_SIZES.medium;
+  const rng = createSeededRandom(seedValue);
+
+  // Seeded continental and tectonic parameters
+  const lonShift = (rng() - 0.5) * 80;
+  const latShift = (rng() - 0.5) * 15;
+  const harmonicPhaseA = rng() * Math.PI * 2;
+  const harmonicPhaseB = rng() * Math.PI * 2;
+  const harmonicPhaseC = rng() * Math.PI * 2;
+  const seaLevelBias = (rng() - 0.5) * 0.08;
+
+  // Continental parameters
+  const contA_lat = 8 + latShift + (rng() - 0.5) * 10;
+  const contA_lon = -25 + lonShift;
+  const contA_radius = 32 + rng() * 12;
+
+  const contB_lat = -15 - latShift + (rng() - 0.5) * 10;
+  const contB_lon = 115 + lonShift;
+  const contB_radius = 24 + rng() * 10;
+
+  // Optional 3rd subcontinent on large and extra large worlds
+  const hasSubcontinent = mapSize === 'large' || mapSize === 'extra_large' || rng() > 0.45;
+  const contC_lat = (rng() - 0.5) * 50;
+  const contC_lon = (rng() - 0.5) * 360;
+  const contC_radius = 18 + rng() * 10;
+
+  // Pangea parameters
+  const pangeaLat = (rng() - 0.5) * 16;
+  const pangeaLon = (rng() - 0.5) * 40;
+  const pangeaRadius = 48 + rng() * 12;
+
+  // Archipelago island hotspots
+  const archipelagoArcs = [
+    { lat: 15 + (rng() - 0.5) * 15, lon: -40 + (rng() - 0.5) * 60, radius: 18 + rng() * 8 },
+    { lat: -10 + (rng() - 0.5) * 15, lon: 40 + (rng() - 0.5) * 60, radius: 20 + rng() * 10 },
+    { lat: 25 + (rng() - 0.5) * 15, lon: 110 + (rng() - 0.5) * 60, radius: 22 + rng() * 8 },
+    { lat: -30 + (rng() - 0.5) * 15, lon: 160 + (rng() - 0.5) * 60, radius: 18 + rng() * 8 },
+    { lat: 5 + (rng() - 0.5) * 10, lon: -120 + (rng() - 0.5) * 50, radius: 16 + rng() * 8 },
+  ];
+
+  // Waterworld caldera islands
+  const waterVolcanoes = [
+    { lat: (rng() - 0.5) * 40, lon: -30 + (rng() - 0.5) * 60, radius: 10 + rng() * 6 },
+    { lat: (rng() - 0.5) * 40, lon: 60 + (rng() - 0.5) * 60, radius: 12 + rng() * 6 },
+    { lat: (rng() - 0.5) * 40, lon: 140 + (rng() - 0.5) * 60, radius: 11 + rng() * 5 },
+    { lat: (rng() - 0.5) * 40, lon: -120 + (rng() - 0.5) * 60, radius: 9 + rng() * 5 },
+  ];
+
   const cells: WorldCell[] = [];
 
-  for (let r = 0; r < GRID_ROWS; r++) {
+  for (let r = 0; r < rows; r++) {
     // Latitude from +90 (north) to -90 (south) centered in cell band
-    const lat = 90 - ((r + 0.5) / GRID_ROWS) * 180;
+    const lat = 90 - ((r + 0.5) / rows) * 180;
 
-    for (let c = 0; c < GRID_COLS; c++) {
+    for (let c = 0; c < cols; c++) {
       // Longitude from -180 to +180 centered in meridian slice
-      const lon = -180 + ((c + 0.5) / GRID_COLS) * 360;
-      const index = r * GRID_COLS + c;
+      const lon = -180 + ((c + 0.5) / cols) * 360;
+      const index = r * cols + c;
 
       const nx = Math.cos((lon * Math.PI) / 180) * Math.cos((lat * Math.PI) / 180);
       const ny = Math.sin((lat * Math.PI) / 180);
@@ -119,85 +278,97 @@ export function generateInitialWorld(
       let elevation = 0;
 
       if (worldStructure === 'pangea') {
-        // One grand colossal landmass centered on equator/prime meridian
-        const distFromCenter = Math.hypot(lat, lon);
-        let baseNoise = Math.sin(nx * 2.0 + ny * 1.5) * 0.25 + Math.cos(nz * 2.0) * 0.2;
-        if (distFromCenter < 52) {
-          elevation = Math.cos((distFromCenter / 52) * (Math.PI / 2)) * 0.85 + baseNoise - 0.1;
+        const distFromCenter = Math.hypot(lat - pangeaLat, lon - pangeaLon);
+        const baseNoise =
+          Math.sin(nx * 2.2 + harmonicPhaseA) * 0.22 +
+          Math.cos(nz * 2.0 + harmonicPhaseB) * 0.18;
+        if (distFromCenter < pangeaRadius) {
+          elevation =
+            Math.cos((distFromCenter / pangeaRadius) * (Math.PI / 2)) * 0.88 +
+            baseNoise -
+            0.08 +
+            seaLevelBias;
           // Central mountain spine
-          if (Math.abs(lon) < 14 && Math.abs(lat) < 35) {
+          if (Math.abs(lon - pangeaLon) < 14 && Math.abs(lat - pangeaLat) < 36) {
             elevation += 0.35;
           }
         } else {
-          elevation = -0.55 + baseNoise * 0.5;
+          elevation = -0.55 + baseNoise * 0.4 + seaLevelBias;
         }
       } else if (worldStructure === 'archipelago') {
-        // Hundreds of scattered islands and atolls across vast shallow waters
         elevation =
-          Math.sin(nx * 6.0 + seedOffset) * 0.35 +
-          Math.cos(nz * 6.5) * 0.35 +
-          Math.sin((lat * Math.PI) / 30) * 0.2 -
-          0.38;
-        // Scattered hotspot island arcs
-        const arcA = Math.hypot(lat - 15, lon - 40);
-        if (arcA < 22) elevation += Math.cos((arcA / 22) * (Math.PI / 2)) * 0.6;
-        const arcB = Math.hypot(lat + 10, lon + 80);
-        if (arcB < 25) elevation += Math.cos((arcB / 25) * (Math.PI / 2)) * 0.65;
-        const arcC = Math.hypot(lat - 30, lon + 140);
-        if (arcC < 20) elevation += Math.cos((arcC / 20) * (Math.PI / 2)) * 0.55;
+          Math.sin(nx * 6.0 + harmonicPhaseA) * 0.32 +
+          Math.cos(nz * 6.2 + harmonicPhaseB) * 0.32 +
+          Math.sin((lat * Math.PI) / 28 + harmonicPhaseC) * 0.18 -
+          0.38 +
+          seaLevelBias;
+        for (const arc of archipelagoArcs) {
+          const dArc = Math.hypot(lat - arc.lat, lon - arc.lon);
+          if (dArc < arc.radius) {
+            elevation += Math.cos((dArc / arc.radius) * (Math.PI / 2)) * 0.65;
+          }
+        }
       } else if (worldStructure === 'shattered') {
-        // High frequency chaotic tectonic rifting with fractured fault lines
         elevation =
-          Math.sin(nx * 4.5 + ny * 3.5) * 0.45 +
-          Math.cos(nz * 5.0 - nx * 3.0) * 0.4 +
-          Math.sin((lon + lat) * 0.12) * 0.25 -
-          0.22;
-        // Deep rift faults
-        if (Math.abs(Math.sin(lon * 0.08) - lat * 0.02) < 0.18) {
+          Math.sin(nx * 4.6 + ny * 3.2 + harmonicPhaseA) * 0.42 +
+          Math.cos(nz * 4.8 - nx * 2.8 + harmonicPhaseB) * 0.38 +
+          Math.sin((lon + lat) * 0.11 + harmonicPhaseC) * 0.24 -
+          0.22 +
+          seaLevelBias;
+        if (Math.abs(Math.sin((lon + lonShift) * 0.08) - (lat + latShift) * 0.02) < 0.18) {
           elevation -= 0.45;
         }
       } else if (worldStructure === 'waterworld') {
-        // Deep endless ocean abyss with 3-4 nascent volcanic hot spots
-        elevation = -0.65 + Math.sin(nx * 3.0) * 0.15;
-        const volcanoA = Math.hypot(lat - 5, lon - 20);
-        if (volcanoA < 12) elevation += Math.cos((volcanoA / 12) * (Math.PI / 2)) * 0.95;
-        const volcanoB = Math.hypot(lat + 22, lon + 100);
-        if (volcanoB < 14) elevation += Math.cos((volcanoB / 14) * (Math.PI / 2)) * 0.90;
-        const volcanoC = Math.hypot(lat - 25, lon + 160);
-        if (volcanoC < 10) elevation += Math.cos((volcanoC / 10) * (Math.PI / 2)) * 0.85;
+        elevation = -0.66 + Math.sin(nx * 3.2 + harmonicPhaseA) * 0.14 + seaLevelBias;
+        for (const v of waterVolcanoes) {
+          const dVolc = Math.hypot(lat - v.lat, lon - v.lon);
+          if (dVolc < v.radius) {
+            elevation += Math.cos((dVolc / v.radius) * (Math.PI / 2)) * 0.95;
+          }
+        }
       } else {
-        // Default 'continental': Dual organic continents + island clusters
+        // Continental: Dual organic continents + island clusters
         elevation =
-          Math.sin(nx * 2.5 + ny * 1.8) * 0.4 +
-          Math.cos(nz * 2.2 - ny * 1.5) * 0.35 +
-          Math.sin(nx * 4.0 - nz * 3.0) * 0.2 -
-          0.25;
+          Math.sin(nx * 2.6 + ny * 1.7 + harmonicPhaseA) * 0.38 +
+          Math.cos(nz * 2.3 - ny * 1.4 + harmonicPhaseB) * 0.34 +
+          Math.sin(nx * 3.8 - nz * 2.8 + harmonicPhaseC) * 0.18 -
+          0.24 +
+          seaLevelBias;
 
-        const distToContinentA = Math.hypot(lat - 10, lon - 25);
-        if (distToContinentA < 35) {
-          elevation += Math.cos((distToContinentA / 35) * (Math.PI / 2)) * 0.65;
+        const dContinentA = Math.hypot(lat - contA_lat, lon - contA_lon);
+        if (dContinentA < contA_radius) {
+          elevation += Math.cos((dContinentA / contA_radius) * (Math.PI / 2)) * 0.68;
         }
 
-        const distToContinentB = Math.hypot(lat + 20, lon + 120);
-        if (distToContinentB < 25) {
-          elevation += Math.cos((distToContinentB / 25) * (Math.PI / 2)) * 0.55;
+        const dContinentB = Math.hypot(lat - contB_lat, lon - contB_lon);
+        if (dContinentB < contB_radius) {
+          elevation += Math.cos((dContinentB / contB_radius) * (Math.PI / 2)) * 0.58;
+        }
+
+        if (hasSubcontinent) {
+          const dContinentC = Math.hypot(lat - contC_lat, lon - contC_lon);
+          if (dContinentC < contC_radius) {
+            elevation += Math.cos((dContinentC / contC_radius) * (Math.PI / 2)) * 0.52;
+          }
         }
       }
 
-      // Clamping elevation
       elevation = Math.max(-1.0, Math.min(1.0, elevation));
 
       const moisture = Math.max(
         0,
-        Math.min(1, 0.5 + Math.sin(lon * 0.05) * 0.3 + (elevation > 0 ? 0.1 : 0.4))
+        Math.min(
+          1,
+          0.5 + Math.sin((lon + lonShift) * 0.05 + harmonicPhaseA) * 0.28 + (elevation > 0 ? 0.1 : 0.4)
+        )
       );
       const climate = computeClimate(lat, moisture);
       const terrain = computeTerrain(elevation, moisture, climate);
 
-      // Natural resources on land (approx 22% of land cells)
+      // Seeded natural resources on land
       let resource: string | null = null;
-      if (elevation > 0 && Math.random() < 0.22) {
-        resource = RESOURCES_LIST[Math.floor(Math.random() * RESOURCES_LIST.length)];
+      if (elevation > 0 && rng() < 0.22) {
+        resource = RESOURCES_LIST[Math.floor(rng() * RESOURCES_LIST.length)];
       }
 
       const fertility =
@@ -236,21 +407,22 @@ export function generateInitialWorld(
 /**
  * Retrieve adjacent cell indices on the spherical grid (with wrap around on longitude)
  */
-export function getAdjacentCellIndices(cellIndex: number, radius = 1): number[] {
-  const r = Math.floor(cellIndex / GRID_COLS);
-  const c = cellIndex % GRID_COLS;
+export function getAdjacentCellIndices(cellIndex: number, radius = 1, totalCells?: number): number[] {
+  const { rows, cols } = getGridDimensions(totalCells);
+  const r = Math.floor(cellIndex / cols);
+  const c = cellIndex % cols;
   const results: Set<number> = new Set();
 
   for (let dr = -radius; dr <= radius; dr++) {
     for (let dc = -radius; dc <= radius; dc++) {
       if (dr === 0 && dc === 0) continue;
       const nr = r + dr;
-      if (nr < 0 || nr >= GRID_ROWS) continue; // Pole clamp
+      if (nr < 0 || nr >= rows) continue; // Pole clamp
 
-      let nc = (c + dc) % GRID_COLS;
-      if (nc < 0) nc += GRID_COLS;
+      let nc = (c + dc) % cols;
+      if (nc < 0) nc += cols;
 
-      results.add(nr * GRID_COLS + nc);
+      results.add(nr * cols + nc);
     }
   }
 
@@ -261,19 +433,20 @@ export function getAdjacentCellIndices(cellIndex: number, radius = 1): number[] 
  * Check if two cells on the spherical grid are adjacent (orthogonally or diagonally),
  * accounting for longitude wrap-around.
  */
-export function areCellsAdjacent(cellIdx1: number, cellIdx2: number): boolean {
+export function areCellsAdjacent(cellIdx1: number, cellIdx2: number, totalCells?: number): boolean {
   if (cellIdx1 === cellIdx2) return true;
-  const r1 = Math.floor(cellIdx1 / GRID_COLS);
-  const c1 = cellIdx1 % GRID_COLS;
-  const r2 = Math.floor(cellIdx2 / GRID_COLS);
-  const c2 = cellIdx2 % GRID_COLS;
+  const { cols } = getGridDimensions(totalCells);
+  const r1 = Math.floor(cellIdx1 / cols);
+  const c1 = cellIdx1 % cols;
+  const r2 = Math.floor(cellIdx2 / cols);
+  const c2 = cellIdx2 % cols;
 
   const dr = Math.abs(r1 - r2);
   if (dr > 1) return false;
 
   let dc = Math.abs(c1 - c2);
-  if (dc > GRID_COLS / 2) {
-    dc = GRID_COLS - dc;
+  if (dc > cols / 2) {
+    dc = cols - dc;
   }
   return dc <= 1;
 }
@@ -292,21 +465,23 @@ export interface CellWithDistance {
  */
 export function getCellsByRadialDistance(
   centerIndex: number,
-  maxDistance: number
+  maxDistance: number,
+  totalCells?: number
 ): CellWithDistance[] {
-  const cr = Math.floor(centerIndex / GRID_COLS);
-  const cc = centerIndex % GRID_COLS;
+  const { rows, cols } = getGridDimensions(totalCells);
+  const cr = Math.floor(centerIndex / cols);
+  const cc = centerIndex % cols;
   const results: CellWithDistance[] = [];
 
   const maxR = Math.ceil(maxDistance);
 
   for (let dr = -maxR; dr <= maxR; dr++) {
     const nr = cr + dr;
-    if (nr < 0 || nr >= GRID_ROWS) continue; // Pole clamp
+    if (nr < 0 || nr >= rows) continue; // Pole clamp
 
     for (let dc = -maxR; dc <= maxR; dc++) {
-      let nc = (cc + dc) % GRID_COLS;
-      if (nc < 0) nc += GRID_COLS;
+      let nc = (cc + dc) % cols;
+      if (nc < 0) nc += cols;
 
       const dist = Math.hypot(dr, dc);
       if (dist <= maxDistance) {
@@ -318,7 +493,7 @@ export function getCellsByRadialDistance(
         else ring = 4;
 
         results.push({
-          cellIndex: nr * GRID_COLS + nc,
+          cellIndex: nr * cols + nc,
           distance: dist,
           ring,
         });
@@ -360,7 +535,7 @@ export function applyCascadingTerrainModification(
   const updated = [...cells];
 
   const maxDist = scope === 'pinpoint' ? 0.5 : scope === 'regional' ? 2.3 : 4.4;
-  const ringNodes = getCellsByRadialDistance(centerIndex, maxDist);
+  const ringNodes = getCellsByRadialDistance(centerIndex, maxDist, cells.length);
 
   let volcanoCount = 0;
   let mountainCount = 0;
@@ -700,17 +875,18 @@ export function applyCascadingTerrainModification(
 /**
  * Calculate minimum distance from a cell to a set of target cell indices on the spherical grid.
  */
-export function getMinDistanceToCellSet(cellIndex: number, targetIndices: number[]): number {
-  const r = Math.floor(cellIndex / GRID_COLS);
-  const c = cellIndex % GRID_COLS;
+export function getMinDistanceToCellSet(cellIndex: number, targetIndices: number[], totalCells?: number): number {
+  const { cols } = getGridDimensions(totalCells);
+  const r = Math.floor(cellIndex / cols);
+  const c = cellIndex % cols;
   let minDist = Infinity;
 
   for (const tIdx of targetIndices) {
-    const tr = Math.floor(tIdx / GRID_COLS);
-    const tc = tIdx % GRID_COLS;
+    const tr = Math.floor(tIdx / cols);
+    const tc = tIdx % cols;
     const dr = Math.abs(r - tr);
     let dc = Math.abs(c - tc);
-    if (dc > GRID_COLS / 2) dc = GRID_COLS - dc;
+    if (dc > cols / 2) dc = cols - dc;
     const dist = Math.hypot(dr, dc);
     if (dist < minDist) {
       minDist = dist;
@@ -727,8 +903,10 @@ export function getMinDistanceToCellSet(cellIndex: number, targetIndices: number
  */
 export function getMultiCellRadialNodes(
   targetIndices: number[],
-  maxDistance: number
+  maxDistance: number,
+  totalCells?: number
 ): CellWithDistance[] {
+  const { rows, cols } = getGridDimensions(totalCells);
   const targetSet = new Set(targetIndices);
   const results: CellWithDistance[] = [];
 
@@ -746,22 +924,22 @@ export function getMultiCellRadialNodes(
   const maxR = Math.ceil(maxDistance);
 
   for (const tIdx of targetIndices) {
-    const tr = Math.floor(tIdx / GRID_COLS);
-    const tc = tIdx % GRID_COLS;
+    const tr = Math.floor(tIdx / cols);
+    const tc = tIdx % cols;
 
     for (let dr = -maxR; dr <= maxR; dr++) {
       const nr = tr + dr;
-      if (nr < 0 || nr >= GRID_ROWS) continue;
+      if (nr < 0 || nr >= rows) continue;
 
       for (let dc = -maxR; dc <= maxR; dc++) {
-        let nc = (tc + dc) % GRID_COLS;
-        if (nc < 0) nc += GRID_COLS;
+        let nc = (tc + dc) % cols;
+        if (nc < 0) nc += cols;
 
-        const candidateIdx = nr * GRID_COLS + nc;
+        const candidateIdx = nr * cols + nc;
         if (visited.has(candidateIdx)) continue;
         visited.add(candidateIdx);
 
-        const dist = getMinDistanceToCellSet(candidateIdx, targetIndices);
+        const dist = getMinDistanceToCellSet(candidateIdx, targetIndices, totalCells);
         if (dist <= maxDistance) {
           let ring = 1;
           if (dist <= 1.45) ring = 1;
@@ -817,7 +995,7 @@ export function applyMultiCellCascadingTerrainModification(
 
   const updated = [...cells];
   const maxDist = scope === 'pinpoint' ? 0.5 : scope === 'regional' ? 2.3 : 4.4;
-  const ringNodes = getMultiCellRadialNodes(targetIndices, maxDist);
+  const ringNodes = getMultiCellRadialNodes(targetIndices, maxDist, cells.length);
 
   let volcanoCount = 0;
   let mountainCount = 0;
@@ -1156,7 +1334,7 @@ export function applyMultiCellCascadingClimateModification(
 
   const updated = [...cells];
   const maxDist = scope === 'pinpoint' ? 0.5 : scope === 'regional' ? 2.3 : 4.4;
-  const ringNodes = getMultiCellRadialNodes(targetIndices, maxDist);
+  const ringNodes = getMultiCellRadialNodes(targetIndices, maxDist, cells.length);
 
   for (const node of ringNodes) {
     const cell = { ...updated[node.cellIndex] };
@@ -1236,7 +1414,7 @@ export function applyCatastropheToWorld(
   type: CatastropheType = 'meteor'
 ): CatastropheResult {
   const updated = [...cells];
-  const ringNodes = getCellsByRadialDistance(centerIndex, 3.8);
+  const ringNodes = getCellsByRadialDistance(centerIndex, 3.8, cells.length);
   const centerCell = updated[centerIndex];
 
   let narrative = '';

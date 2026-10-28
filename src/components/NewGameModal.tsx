@@ -4,13 +4,17 @@
  */
 
 import React, { useState } from 'react';
-import { Deity, WorldStructureType } from '../types/game';
+import { Deity, MapSizeType, WorldStructureType } from '../types/game';
 import {
   CANDIDATE_NPC_DEITIES,
   CANONICAL_DEITY_PAIRS,
   generateRandomDeity,
   DeityPair,
 } from '../simulation/npcDeities';
+import {
+  MAP_SIZES,
+  generateRandomSeed,
+} from '../simulation/worldGrid';
 import {
   X,
   Globe,
@@ -31,6 +35,8 @@ import {
   HeartHandshake,
   Layers,
   Wand2,
+  Maximize2,
+  Shuffle,
 } from 'lucide-react';
 
 import {
@@ -45,6 +51,8 @@ interface NewGameModalProps {
   onClose: () => void;
   onStartNewGame: (params: {
     worldStructure: WorldStructureType;
+    mapSize: MapSizeType;
+    worldSeed: string;
     playerDeity: Deity;
     totalDeityCount: number;
     selectedNpcIds: string[];
@@ -71,6 +79,9 @@ export const NewGameModal: React.FC<NewGameModalProps> = ({
   onStartNewGame,
 }) => {
   const [worldStructure, setWorldStructure] = useState<WorldStructureType>('continental');
+  const [mapSize, setMapSize] = useState<MapSizeType>('medium');
+  const [worldSeed, setWorldSeed] = useState<string>(() => generateRandomSeed());
+  const [randomizeOnStart, setRandomizeOnStart] = useState<boolean>(true);
 
   // Player Deity State
   const [name, setName] = useState('Aethelgard');
@@ -275,9 +286,12 @@ export const NewGameModal: React.FC<NewGameModalProps> = ({
     };
 
     const totalDeityCount = 1 + selectedNpcIds.length;
+    const finalSeed = (randomizeOnStart || !worldSeed.trim()) ? generateRandomSeed() : worldSeed.trim();
 
     onStartNewGame({
       worldStructure,
+      mapSize,
+      worldSeed: finalSeed,
       playerDeity,
       totalDeityCount,
       selectedNpcIds,
@@ -410,6 +424,110 @@ export const NewGameModal: React.FC<NewGameModalProps> = ({
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* 1b. World Map Scale */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-bold font-serif text-amber-300 flex items-center gap-1.5">
+                <Maximize2 className="w-4 h-4 text-amber-400" /> World Map Scale & Resolution
+              </label>
+              <span className="text-[11px] text-slate-400">
+                Active: <span className="text-amber-400 font-bold">{MAP_SIZES[mapSize].name}</span> ({MAP_SIZES[mapSize].totalCells} blocks)
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              {(Object.keys(MAP_SIZES) as MapSizeType[]).map((sizeKey) => {
+                const config = MAP_SIZES[sizeKey];
+                const isSelected = mapSize === sizeKey;
+                return (
+                  <button
+                    key={sizeKey}
+                    type="button"
+                    onClick={() => setMapSize(sizeKey)}
+                    className={`p-3 rounded-xl border text-left flex flex-col justify-between transition ${
+                      isSelected
+                        ? 'bg-amber-950/40 border-amber-500 shadow-md shadow-amber-500/10 ring-1 ring-amber-500/50'
+                        : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-bold text-white text-xs tracking-wide">
+                        {sizeKey === 'small' && 'Small'}
+                        {sizeKey === 'medium' && 'Medium (Default)'}
+                        {sizeKey === 'large' && 'Large'}
+                        {sizeKey === 'extra_large' && 'Extra Large'}
+                      </span>
+                      {isSelected ? (
+                        <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                      ) : (
+                        <span className="text-[10px] text-slate-500 font-mono">{config.rows}×{config.cols}</span>
+                      )}
+                    </div>
+                    <div className="text-[10px] text-slate-400 leading-tight">
+                      {config.description}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 1c. Cosmic World Seed & Randomization */}
+          <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold font-serif text-amber-300 flex items-center gap-1.5">
+                <Shuffle className="w-3.5 h-3.5 text-amber-400" /> Cosmic World Seed & Deterministic Randomization
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const newSeed = generateRandomSeed();
+                  setWorldSeed(newSeed);
+                }}
+                className="text-[11px] text-amber-400 hover:text-amber-300 flex items-center gap-1 font-semibold transition"
+              >
+                <Dice5 className="w-3.5 h-3.5" /> Roll Random Seed
+              </button>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
+              <div className="sm:col-span-2 flex items-center gap-2">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    value={worldSeed}
+                    onChange={(e) => setWorldSeed(e.target.value)}
+                    placeholder="Enter custom seed (e.g. Genesis-42)"
+                    className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-amber-300 font-mono text-xs outline-none focus:border-amber-500"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setWorldSeed(generateRandomSeed())}
+                  title="Generate new seed"
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs flex items-center gap-1 transition"
+                >
+                  <Dice5 className="w-3.5 h-3.5 text-amber-400" />
+                  <span className="hidden sm:inline">Reroll</span>
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none text-[11px] text-slate-300 hover:text-white">
+                  <input
+                    type="checkbox"
+                    checked={randomizeOnStart}
+                    onChange={(e) => setRandomizeOnStart(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-900 text-amber-500 focus:ring-amber-500/40"
+                  />
+                  <span>Randomize seed on Genesis</span>
+                </label>
+              </div>
+            </div>
+            <p className="text-[10px] text-slate-500 leading-relaxed">
+              Same seed + archetype produces the identical world topography, climate belts, and resource caches. Turning on 'Randomize' guarantees a fresh unpredictable world generation whenever you press Start.
+            </p>
           </div>
 
           {/* 2. Player Deity Customization */}
