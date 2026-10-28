@@ -3,10 +3,26 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { City, Civilization, MapViewMode, Race, WorldCell } from '../types/game';
 import { GRID_COLS, GRID_ROWS } from '../simulation/worldGrid';
-import { Sparkles, Gem, Pickaxe, Wheat, Trees, Flame, Droplets, Compass, Eye } from 'lucide-react';
+import { PRESET_RACES } from '../simulation/races';
+import { RaceArtwork } from './RaceArtwork';
+import {
+  Sparkles,
+  Gem,
+  Pickaxe,
+  Wheat,
+  Trees,
+  Flame,
+  Droplets,
+  Compass,
+  Eye,
+  Shield,
+  Users,
+  Crown,
+  X,
+} from 'lucide-react';
 
 interface FlatMapAtlasProps {
   cells: WorldCell[];
@@ -60,16 +76,24 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
   const [hoveredCellIndex, setHoveredCellIndex] = useState<number | null>(null);
   const [showResourceOverlay, setShowResourceOverlay] = useState<boolean>(true);
   const [isDraggingSelection, setIsDraggingSelection] = useState<boolean>(false);
-  const isDraggingRef = React.useRef(false);
+  const isDraggingRef = useRef(false);
+
+  // Persistent, hover-activated settlement tooltip state
+  const [hoveredSettlementId, setHoveredSettlementId] = useState<string | null>(null);
+  const isHoveringTooltipRef = useRef(false);
+  const closeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Global mouseup listener to terminate drag-selection cleanly
-  React.useEffect(() => {
+  useEffect(() => {
     const handleGlobalMouseUp = () => {
       isDraggingRef.current = false;
       setIsDraggingSelection(false);
     };
     window.addEventListener('mouseup', handleGlobalMouseUp);
-    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+    return () => {
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+    };
   }, []);
 
   // Effective selected indices
@@ -91,6 +115,59 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
   const extraCost = activeSelectedIndices.length >= 2
     ? 1 + (activeSelectedIndices.length - 2) * 2
     : 0;
+
+  // Active settlement being inspected via persistent hover
+  const activeSettlement = hoveredSettlementId
+    ? cities.find((c) => c.id === hoveredSettlementId)
+    : null;
+  const activeSettlementRace = activeSettlement
+    ? races.find((r) => r.id === activeSettlement.raceId) ||
+      PRESET_RACES.find((r) => r.id === activeSettlement.raceId) ||
+      null
+    : null;
+  const activeSettlementCiv = activeSettlement
+    ? civilizations.find((cv) => cv.id === activeSettlement.civilizationId)
+    : null;
+  const activeSettlementCell = activeSettlement
+    ? cells.find((c) => c.index === activeSettlement.cellIndex)
+    : null;
+
+  // Clamped settlement tooltip coordinates strictly inside map grid container
+  const getSettlementTooltipStyle = (city: City): React.CSSProperties => {
+    const targetCell = cells.find((c) => c.index === city.cellIndex);
+    if (!targetCell) return { top: '5%', left: '5%' };
+
+    const col = targetCell.index % GRID_COLS;
+    const row = Math.floor(targetCell.index / GRID_COLS);
+
+    const isRight = col > 24;
+    const isBottom = row > 12;
+
+    const leftPercent = ((col + 0.5) / GRID_COLS) * 100;
+    const topPercent = ((row + 0.5) / GRID_ROWS) * 100;
+
+    const style: React.CSSProperties = {
+      position: 'absolute',
+      zIndex: 50,
+      maxHeight: '94%',
+      width: '320px',
+      maxWidth: 'calc(100% - 24px)',
+    };
+
+    if (isRight) {
+      style.right = `${Math.max(1.5, Math.min(96, 100 - leftPercent + 1.2))}%`;
+    } else {
+      style.left = `${Math.max(1.5, Math.min(96, leftPercent + 1.2))}%`;
+    }
+
+    if (isBottom) {
+      style.bottom = `${Math.max(1.5, Math.min(92, 100 - topPercent - 2))}%`;
+    } else {
+      style.top = `${Math.max(1.5, Math.min(92, topPercent - 2))}%`;
+    }
+
+    return style;
+  };
 
   return (
     <div className="w-full h-full flex flex-col items-center justify-between p-2 sm:p-4 bg-slate-950 overflow-auto text-slate-100">
@@ -152,137 +229,355 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
           )}
         </div>
 
-        {/* The 2D Cylindrical Grid Canvas */}
-        <div
-          className="grid gap-[1px] bg-amber-950/50 rounded-xl overflow-hidden select-none border border-amber-900/50 shadow-inner"
-          style={{
-            gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
-            aspectRatio: '2 / 1',
-          }}
-          onMouseLeave={() => {
-            setHoveredCellIndex(null);
-          }}
-        >
-          {cells.map((cell) => {
-            const isSelected = activeSelectedIndices.includes(cell.index);
-            const isHovered = hoveredCellIndex === cell.index;
-            const city = cell.cityId ? cities.find((c) => c.id === cell.cityId) : null;
-            const civ = cell.civilizationId ? civilizations.find((cv) => cv.id === cell.civilizationId) : null;
-            const resMeta = getResourceMeta(cell.resource);
-
-            let bgColor = '#0f172a';
-            if (viewMode === 'physical' || viewMode === 'resources') {
-              if (cell.terrain === 'deep_ocean') bgColor = '#082f49';
-              else if (cell.terrain === 'ocean') bgColor = '#0369a1';
-              else if (cell.terrain === 'shallow_water') bgColor = '#38bdf8';
-              else if (cell.terrain === 'mountains') bgColor = '#57534e';
-              else if (cell.terrain === 'hills') bgColor = '#78716c';
-              else if (cell.terrain === 'forest') bgColor = '#15803d';
-              else if (cell.terrain === 'desert') bgColor = '#b45309';
-              else if (cell.terrain === 'tundra') bgColor = '#94a3b8';
-              else if (cell.terrain === 'swamp') bgColor = '#3f6212';
-              else if (cell.terrain === 'volcanic') bgColor = '#991b1b';
-              else bgColor = '#22c55e';
-
-              // If dedicated resources view mode, dim cells without resources
-              if (viewMode === 'resources' && !cell.resource && cell.elevation > 0) {
-                bgColor = '#1e293b';
+        {/* The 2D Cylindrical Grid Canvas & Bounded Tooltip Wrapper */}
+        <div className="relative w-full rounded-xl select-none">
+          <div
+            className="grid gap-[1px] bg-amber-950/50 rounded-xl overflow-hidden select-none border border-amber-900/50 shadow-inner w-full"
+            style={{
+              gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
+              aspectRatio: '2 / 1',
+            }}
+            onMouseLeave={() => {
+              setHoveredCellIndex(null);
+              if (!isHoveringTooltipRef.current) {
+                if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+                closeTimeoutRef.current = setTimeout(() => {
+                  if (!isHoveringTooltipRef.current) {
+                    setHoveredSettlementId(null);
+                  }
+                }, 350);
               }
-            } else if (viewMode === 'political' && civ) {
-              bgColor = civ.color;
-            } else if (viewMode === 'climate') {
-              if (cell.climate === 'arctic') bgColor = '#93c5fd';
-              else if (cell.climate === 'cold') bgColor = '#67e8f9';
-              else if (cell.climate === 'temperate') bgColor = '#22c55e';
-              else if (cell.climate === 'arid') bgColor = '#d97706';
-              else if (cell.climate === 'tropical') bgColor = '#15803d';
-              else bgColor = '#ef4444';
-            } else {
-              if (cell.elevation <= 0) bgColor = '#0369a1';
-              else bgColor = cell.population > 100 ? '#eab308' : '#334155';
-            }
+            }}
+          >
+            {cells.map((cell) => {
+              const isSelected = activeSelectedIndices.includes(cell.index);
+              const isHovered = hoveredCellIndex === cell.index;
+              const city = cell.cityId ? cities.find((c) => c.id === cell.cityId) : null;
+              const civ = cell.civilizationId ? civilizations.find((cv) => cv.id === cell.civilizationId) : null;
+              const resMeta = getResourceMeta(cell.resource);
 
-            return (
-              <button
-                key={cell.index}
-                onMouseDown={(e) => {
-                  isDraggingRef.current = true;
-                  setIsDraggingSelection(true);
-                  // If holding Shift, multi-select; else start new selection
-                  onSelectCell(cell.index, e.shiftKey);
-                }}
-                onMouseEnter={() => {
-                  setHoveredCellIndex(cell.index);
-                  if (isDraggingRef.current) {
-                    // Continuous drag adds adjacent cells to selection
-                    onSelectCell(cell.index, true);
-                  }
-                }}
-                onClick={(e) => {
-                  // Fallback single-click handler
-                  if (!isDraggingRef.current) {
+              let bgColor = '#0f172a';
+              if (viewMode === 'physical' || viewMode === 'resources') {
+                if (cell.terrain === 'deep_ocean') bgColor = '#082f49';
+                else if (cell.terrain === 'ocean') bgColor = '#0369a1';
+                else if (cell.terrain === 'shallow_water') bgColor = '#38bdf8';
+                else if (cell.terrain === 'mountains') bgColor = '#57534e';
+                else if (cell.terrain === 'hills') bgColor = '#78716c';
+                else if (cell.terrain === 'forest') bgColor = '#15803d';
+                else if (cell.terrain === 'desert') bgColor = '#b45309';
+                else if (cell.terrain === 'tundra') bgColor = '#94a3b8';
+                else if (cell.terrain === 'swamp') bgColor = '#3f6212';
+                else if (cell.terrain === 'volcanic') bgColor = '#991b1b';
+                else bgColor = '#22c55e';
+
+                // If dedicated resources view mode, dim cells without resources
+                if (viewMode === 'resources' && !cell.resource && cell.elevation > 0) {
+                  bgColor = '#1e293b';
+                }
+              } else if (viewMode === 'political' && civ) {
+                bgColor = civ.color;
+              } else if (viewMode === 'climate') {
+                if (cell.climate === 'arctic') bgColor = '#93c5fd';
+                else if (cell.climate === 'cold') bgColor = '#67e8f9';
+                else if (cell.climate === 'temperate') bgColor = '#22c55e';
+                else if (cell.climate === 'arid') bgColor = '#d97706';
+                else if (cell.climate === 'tropical') bgColor = '#15803d';
+                else bgColor = '#ef4444';
+              } else {
+                if (cell.elevation <= 0) bgColor = '#0369a1';
+                else bgColor = cell.population > 100 ? '#eab308' : '#334155';
+              }
+
+              return (
+                <button
+                  key={cell.index}
+                  onMouseDown={(e) => {
+                    isDraggingRef.current = true;
+                    setIsDraggingSelection(true);
+                    // If holding Shift, multi-select; else start new selection
                     onSelectCell(cell.index, e.shiftKey);
-                  }
-                }}
-                style={{ backgroundColor: bgColor }}
-                className={`relative group transition-all duration-75 flex items-center justify-center p-0 m-0 ${
-                  isSelected
-                    ? 'ring-2 ring-amber-400 z-20 scale-110 shadow-xl brightness-125'
-                    : isHovered
-                    ? 'ring-1 ring-cyan-300 z-10 scale-105'
-                    : 'hover:brightness-110'
-                }`}
-                title={`[${cell.lat.toFixed(0)}°, ${cell.lon.toFixed(0)}°] • ${cell.terrain.replace('_', ' ')} (${cell.climate})${
-                  cell.resource ? ` • Resource: ${cell.resource}` : ''
-                }${city ? ` • City: ${city.name}` : ''}`}
-              >
-                {/* Settlement Citadel or Ancient Ruin Icon */}
-                {city && (
-                  <span
-                    className={`text-[10px] leading-none drop-shadow z-10 ${
-                      city.status === 'ruined' ? 'animate-pulse text-red-400' : ''
-                    }`}
-                    title={city.status === 'ruined' ? `Ruins of ${city.name} (Sacked/Abandoned)` : `City: ${city.name}`}
-                  >
-                    {city.status === 'ruined' ? '🏚' : '🏛'}
-                  </span>
-                )}
+                  }}
+                  onMouseEnter={() => {
+                    setHoveredCellIndex(cell.index);
+                    if (city) {
+                      if (closeTimeoutRef.current) {
+                        clearTimeout(closeTimeoutRef.current);
+                        closeTimeoutRef.current = null;
+                      }
+                      setHoveredSettlementId(city.id);
+                    } else if (!isHoveringTooltipRef.current) {
+                      if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+                      closeTimeoutRef.current = setTimeout(() => {
+                        if (!isHoveringTooltipRef.current) {
+                          setHoveredSettlementId(null);
+                        }
+                      }, 350);
+                    }
 
-                {/* Other Deities' Races / Civilization Territory Markers */}
-                {!city && cell.civilizationId && (
-                  <span
-                    className="w-1.5 h-1.5 rounded-full z-10 opacity-80 shadow-sm"
-                    style={{ backgroundColor: civ?.color || '#cbd5e1' }}
-                    title={`Territory: ${civ?.name}`}
-                  />
-                )}
-
-                {/* Prominent High-Visibility Resource Icon / Glyph */}
-                {resMeta && showResourceOverlay && (
-                  <span
-                    className={`absolute flex items-center justify-center pointer-events-none ${
-                      city ? 'bottom-0 right-0 scale-75' : 'inset-0'
-                    }`}
-                  >
+                    if (isDraggingRef.current) {
+                      // Continuous drag adds adjacent cells to selection
+                      onSelectCell(cell.index, true);
+                    }
+                  }}
+                  onClick={(e) => {
+                    // Fallback single-click handler
+                    if (!isDraggingRef.current) {
+                      onSelectCell(cell.index, e.shiftKey);
+                    }
+                  }}
+                  style={{ backgroundColor: bgColor }}
+                  className={`relative group transition-all duration-75 flex items-center justify-center p-0 m-0 ${
+                    isSelected
+                      ? 'ring-2 ring-amber-400 z-20 scale-110 shadow-xl brightness-125'
+                      : isHovered
+                      ? 'ring-1 ring-cyan-300 z-10 scale-105'
+                      : 'hover:brightness-110'
+                  }`}
+                  title={`[${cell.lat.toFixed(0)}°, ${cell.lon.toFixed(0)}°] • ${cell.terrain.replace('_', ' ')} (${cell.climate})${
+                    cell.resource ? ` • Resource: ${cell.resource}` : ''
+                  }${city ? ` • City: ${city.name}` : ''}`}
+                >
+                  {/* Settlement Citadel or Ancient Ruin Icon */}
+                  {city && (
                     <span
-                      className="text-[9px] sm:text-[10px] leading-none drop-shadow-md select-none transform hover:scale-125 transition-transform"
-                      style={{ filter: `drop-shadow(0 0 3px ${resMeta.color})` }}
+                      className={`text-[10px] leading-none drop-shadow z-10 ${
+                        city.status === 'ruined' ? 'animate-pulse text-red-400' : ''
+                      }`}
+                      title={city.status === 'ruined' ? `Ruins of ${city.name} (Sacked/Abandoned)` : `City: ${city.name}`}
                     >
-                      {resMeta.icon}
+                      {city.status === 'ruined' ? '🏚' : '🏛'}
                     </span>
-                  </span>
-                )}
+                  )}
 
-                {/* Miracle Aura Ring */}
-                {cell.miracleAura && (
-                  <span
-                    className="absolute inset-0 border border-purple-400/90 rounded pointer-events-none animate-pulse"
-                    style={{ borderColor: cell.miracleAura.color }}
-                  />
-                )}
-              </button>
-            );
-          })}
+                  {/* Other Deities' Races / Civilization Territory Markers */}
+                  {!city && cell.civilizationId && (
+                    <span
+                      className="w-1.5 h-1.5 rounded-full z-10 opacity-80 shadow-sm"
+                      style={{ backgroundColor: civ?.color || '#cbd5e1' }}
+                      title={`Territory: ${civ?.name}`}
+                    />
+                  )}
+
+                  {/* Prominent High-Visibility Resource Icon / Glyph */}
+                  {resMeta && showResourceOverlay && (
+                    <span
+                      className={`absolute flex items-center justify-center pointer-events-none ${
+                        city ? 'bottom-0 right-0 scale-75' : 'inset-0'
+                      }`}
+                    >
+                      <span
+                        className="text-[9px] sm:text-[10px] leading-none drop-shadow-md select-none transform hover:scale-125 transition-transform"
+                        style={{ filter: `drop-shadow(0 0 3px ${resMeta.color})` }}
+                      >
+                        {resMeta.icon}
+                      </span>
+                    </span>
+                  )}
+
+                  {/* Miracle Aura Ring */}
+                  {cell.miracleAura && (
+                    <span
+                      className="absolute inset-0 border border-purple-400/90 rounded pointer-events-none animate-pulse"
+                      style={{ borderColor: cell.miracleAura.color }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Persistent, Hover-Activated Settlement Tooltip (Bounded Within Map Grid) */}
+          {activeSettlement && activeSettlementCell && (
+            <div
+              className="absolute z-50 w-80 max-w-[340px] max-h-[94%] overflow-y-auto rounded-2xl bg-slate-950/95 border-2 border-amber-500/80 p-3 shadow-2xl backdrop-blur-md text-slate-100 flex flex-col gap-2 animate-fade-in pointer-events-auto"
+              style={getSettlementTooltipStyle(activeSettlement)}
+              onMouseEnter={() => {
+                isHoveringTooltipRef.current = true;
+                if (closeTimeoutRef.current) {
+                  clearTimeout(closeTimeoutRef.current);
+                  closeTimeoutRef.current = null;
+                }
+              }}
+              onMouseLeave={() => {
+                isHoveringTooltipRef.current = false;
+                if (closeTimeoutRef.current) clearTimeout(closeTimeoutRef.current);
+                closeTimeoutRef.current = setTimeout(() => {
+                  setHoveredSettlementId(null);
+                }, 250);
+              }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between pb-1.5 border-b border-amber-900/40">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {activeSettlement.status === 'ruined' ? (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-950/80 text-red-300 border border-red-500/50 flex items-center gap-1">
+                      <span>🏚</span> Ancient Ruin
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/50 flex items-center gap-1">
+                      <span>🏛</span> Settlement
+                    </span>
+                  )}
+                  {activeSettlementCiv && (
+                    <span
+                      className="px-1.5 py-0.5 rounded text-[9px] font-medium border"
+                      style={{
+                        borderColor: `${activeSettlementCiv.color}60`,
+                        color: activeSettlementCiv.color,
+                        backgroundColor: `${activeSettlementCiv.color}15`,
+                      }}
+                    >
+                      {activeSettlementCiv.name}
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setHoveredSettlementId(null)}
+                  className="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                  title="Close preview"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Graphical Image for the Race */}
+              <div className="rounded-xl overflow-hidden shadow-inner border border-amber-500/30">
+                <RaceArtwork race={activeSettlementRace} className="w-full h-28" />
+              </div>
+
+              {/* Settlement Identity & Coordinates */}
+              <div>
+                <h4 className="font-serif font-bold text-sm text-white flex items-center justify-between">
+                  <span>{activeSettlement.name}</span>
+                  <span className="text-[10px] text-amber-300/80 font-mono">
+                    [{activeSettlementCell.lat.toFixed(0)}°{activeSettlementCell.lat >= 0 ? 'N' : 'S'}, {activeSettlementCell.lon.toFixed(0)}°{activeSettlementCell.lon >= 0 ? 'E' : 'W'}]
+                  </span>
+                </h4>
+                <div className="text-[11px] text-slate-400 flex items-center gap-2 mt-0.5">
+                  <span className="capitalize">{activeSettlementCell.terrain.replace('_', ' ')}</span>
+                  <span>•</span>
+                  <span className="capitalize">{activeSettlementCell.climate} Climate</span>
+                  {activeSettlementCell.resource && (
+                    <>
+                      <span>•</span>
+                      <span className="text-amber-300 font-medium">{activeSettlementCell.resource}</span>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Population & Fortification Metrics */}
+              <div className="grid grid-cols-3 gap-1.5 text-center">
+                <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 flex flex-col items-center">
+                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                    <Users className="w-3 h-3 text-blue-400" /> Pop
+                  </span>
+                  <span className="font-bold text-xs text-white">
+                    {activeSettlement.population.toLocaleString()}
+                  </span>
+                </div>
+                <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 flex flex-col items-center">
+                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                    <Shield className="w-3 h-3 text-amber-400" /> Walls
+                  </span>
+                  <span className="font-bold text-xs text-amber-300">
+                    Tier {activeSettlement.defense}
+                  </span>
+                </div>
+                <div className="p-1.5 rounded-lg bg-slate-900 border border-slate-800 flex flex-col items-center">
+                  <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                    💰 Wealth
+                  </span>
+                  <span className="font-bold text-xs text-emerald-400">
+                    {activeSettlement.wealth} Gold
+                  </span>
+                </div>
+              </div>
+
+              {/* Race Cultural Inclination */}
+              {activeSettlementRace && (
+                <div className="p-2 rounded-xl bg-slate-900/90 border border-amber-500/20 space-y-1.5">
+                  <div className="flex items-center justify-between text-xs font-semibold">
+                    <span className="text-amber-300 flex items-center gap-1">
+                      <Crown className="w-3.5 h-3.5 text-amber-400" />
+                      {activeSettlementRace.name}
+                    </span>
+                    <span className="text-[10px] text-slate-400 capitalize">
+                      {activeSettlementRace.demonym} • {activeSettlementRace.category}
+                    </span>
+                  </div>
+
+                  {/* Inclination Metrics */}
+                  <div className="space-y-1 pt-0.5 text-[10px]">
+                    <div className="flex items-center justify-between text-slate-300">
+                      <span>Procreation Rate:</span>
+                      <span className="font-mono font-bold text-emerald-400">
+                        {(activeSettlementRace.procreationRate || activeSettlementRace.fertilityMultiplier || 1.0).toFixed(1)}x
+                        <span className="text-slate-400 font-normal ml-1">
+                          ({(activeSettlementRace.procreationRate || 1.0) > 1.5 ? 'Prolific Swarm' : (activeSettlementRace.procreationRate || 1.0) < 0.8 ? 'Reverent / Slow' : 'Balanced'})
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-slate-300">
+                      <span>Expansion Inclination:</span>
+                      <span className="font-mono font-bold text-amber-400">
+                        {((activeSettlementRace.expansionInclination || 0.5) * 100).toFixed(0)}%
+                        <span className="text-slate-400 font-normal ml-1">
+                          ({(activeSettlementRace.expansionInclination || 0.5) > 0.7 ? 'Aggressive Imperialist' : (activeSettlementRace.expansionInclination || 0.5) < 0.3 ? 'Reclusive & Isolated' : 'Measured Frontier'})
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-slate-300">
+                      <span>Settlement Tendency:</span>
+                      <span className="font-mono font-bold text-cyan-400">
+                        {((activeSettlementRace.settlementTendency || 0.5) * 100).toFixed(0)}%
+                        <span className="text-slate-400 font-normal ml-1">
+                          ({(activeSettlementRace.settlementTendency || 0.5) > 0.7 ? 'Rapid Fortress Sprawl' : (activeSettlementRace.settlementTendency || 0.5) < 0.3 ? 'Sacred Havens Only' : 'Steady Towns'})
+                        </span>
+                      </span>
+                    </div>
+                  </div>
+
+                  {activeSettlementRace.naturalWonderAffinity && (
+                    <div className="px-2 py-1 rounded-lg bg-emerald-950/60 border border-emerald-500/40 text-[10px] text-emerald-300 font-medium flex items-center gap-1.5">
+                      <span>✨</span>
+                      <span>Sacred wonder affinity (Sanctuaries near Mana Springs)</span>
+                    </div>
+                  )}
+
+                  {/* Traits Chips */}
+                  {activeSettlementRace.traits && activeSettlementRace.traits.length > 0 && (
+                    <div className="flex flex-wrap gap-1 pt-0.5">
+                      {activeSettlementRace.traits.map((t) => (
+                        <span
+                          key={t}
+                          className="px-1.5 py-0.5 rounded text-[9px] bg-slate-800 text-slate-300 border border-slate-700"
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Ruined Warning If Sacked */}
+              {activeSettlement.status === 'ruined' && (
+                <div className="p-2 rounded-xl bg-red-950/60 border border-red-500/40 text-[10px] text-red-200">
+                  <div className="font-bold text-red-300 flex items-center gap-1">
+                    <span>⚠️</span>
+                    <span>Sacked & Desecrated Fortress</span>
+                  </div>
+                  <p className="mt-0.5 text-red-200/80 leading-tight">
+                    Fallen to ruin in Year {activeSettlement.ruinedYear || '500'} by {activeSettlement.ruinedByCivName || 'invaders'}. Abandoned ruins risk breeding feral monstrous abominations if unreclaimed.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Selected / Hovered World Section Inspector Card */}
