@@ -55,6 +55,8 @@ interface ControlDockProps {
   onShapeClimate: (climate: ClimateType, scope: ShapingScope) => void;
   onExecuteAction: (actionType: ActionPowerType, extraPayload?: any) => void;
   onExecuteCatastrophe?: (type: 'meteor' | 'volcano' | 'deluge' | 'wildfire') => void;
+  isOpen?: boolean;
+  onToggleOpen?: (open: boolean) => void;
 }
 
 export const ControlDock: React.FC<ControlDockProps> = ({
@@ -74,9 +76,20 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   onShapeClimate,
   onExecuteAction,
   onExecuteCatastrophe,
+  isOpen: controlledIsOpen,
+  onToggleOpen,
 }) => {
-  // Start open so players immediately see their options, but they can easily collapse it into the magical pullout handle
-  const [isOpen, setIsOpen] = useState(true);
+  // Support controlled or internal open state
+  const [internalIsOpen, setInternalIsOpen] = useState(true);
+  const isOpen = controlledIsOpen !== undefined ? controlledIsOpen : internalIsOpen;
+  const setIsOpen = (next: boolean) => {
+    if (onToggleOpen) {
+      onToggleOpen(next);
+    } else {
+      setInternalIsOpen(next);
+    }
+  };
+
   const [activeCategory, setActiveCategory] = useState<'land' | 'life' | 'civilization' | 'wrath'>('land');
   const [shapingScope, setShapingScope] = useState<ShapingScope>('cascade');
   const [landSubTab, setLandSubTab] = useState<'geology' | 'climate'>('geology');
@@ -102,7 +115,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
       {!isOpen && (
         <button
           onClick={() => setIsOpen(true)}
-          className="group absolute right-0 top-1/2 -translate-y-1/2 z-20 flex items-center bg-gradient-to-l from-amber-500 via-purple-600 to-indigo-700 hover:from-amber-400 hover:via-purple-500 hover:to-indigo-600 text-white pl-4 pr-3 py-3 rounded-l-2xl shadow-[0_0_25px_rgba(245,158,11,0.5)] border-y border-l border-amber-300/80 transition-all duration-300 hover:scale-105 hover:pr-4 cursor-pointer"
+          className="group absolute right-0 top-1/2 -translate-y-1/2 z-30 flex items-center bg-gradient-to-l from-amber-500 via-purple-600 to-indigo-700 hover:from-amber-400 hover:via-purple-500 hover:to-indigo-600 text-white pl-4 pr-3 py-3 rounded-l-2xl shadow-[0_0_25px_rgba(245,158,11,0.5)] border-y border-l border-amber-300/80 transition-all duration-300 hover:scale-105 hover:pr-4 cursor-pointer"
           title="Open Divine Powers Drawer"
           aria-label="Open Divine Powers Drawer"
         >
@@ -129,9 +142,9 @@ export const ControlDock: React.FC<ControlDockProps> = ({
         </button>
       )}
 
-      {/* 2. EXPANDED STATE: Sleek Pullout Drawer strictly bounded below top bar (never covers header) */}
+      {/* 2. EXPANDED STATE: Sleek Pullout Drawer that sits alongside the map, pushing the map left without overlapping */}
       {isOpen && (
-        <div className="absolute top-0 bottom-0 right-0 z-20 w-full sm:w-[480px] md:w-[500px] bg-slate-950/95 border-l border-amber-500/40 shadow-2xl backdrop-blur-md flex flex-col text-slate-100 animate-slide-left overflow-hidden">
+        <div className="relative z-20 w-[420px] sm:w-[460px] md:w-[480px] lg:w-[500px] max-w-[50vw] sm:max-w-none h-full flex-shrink-0 bg-slate-950/95 border-l border-amber-500/40 shadow-2xl backdrop-blur-md flex flex-col text-slate-100 overflow-hidden">
           {/* Drawer Header */}
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-900/90 flex-shrink-0">
             <div className="flex items-center gap-3">

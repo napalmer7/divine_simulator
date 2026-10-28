@@ -188,6 +188,37 @@ export interface City {
   ruinedByRaceName?: string;
 }
 
+export type ShieldShape = 'heater' | 'classic' | 'gothic' | 'notched' | 'round' | 'kite';
+export type HeraldicDivision = 'solid' | 'pale' | 'fess' | 'bend' | 'quarterly' | 'chevron' | 'saltire';
+export type HeraldicCharge =
+  | 'dragon'
+  | 'lion'
+  | 'eagle'
+  | 'sacred_tree'
+  | 'crown'
+  | 'anvil'
+  | 'sunburst'
+  | 'twin_axes'
+  | 'serpent'
+  | 'chalice'
+  | 'tower'
+  | 'griffin'
+  | 'wolf'
+  | 'stag'
+  | 'flame'
+  | 'crescent';
+
+export interface CoatOfArms {
+  shieldShape: ShieldShape;
+  division: HeraldicDivision;
+  primaryColor: string;
+  secondaryColor: string;
+  metalColor: string; // Gold (#fbbf24 / #f59e0b) or Silver (#e2e8f0 / #f8fafc)
+  charge: HeraldicCharge;
+  motto: string;
+  blazon: string;
+}
+
 export interface Civilization {
   id: string;
   name: string;
@@ -200,6 +231,7 @@ export interface Civilization {
   alignment: number;
   diplomacy: Record<string, 'allied' | 'peace' | 'tensions' | 'war'>;
   color: string;
+  coatOfArms?: CoatOfArms;
 }
 
 export interface Army {

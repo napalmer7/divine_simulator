@@ -7,6 +7,7 @@ import { AgeId, Army, Avatar, City, Civilization, Deity, HistoryLogEntry, OrderI
 import { AVAILABLE_TECHNOLOGIES, DAWN_OF_WORLDS_COSTS } from './dawnOfWorldsRules';
 import { PRESET_RACES } from './races';
 import { applyTerrainModification, getAdjacentCellIndices } from './worldGrid';
+import { generateCoatOfArms } from './heraldry';
 
 export const CANDIDATE_NPC_DEITIES: Deity[] = [
   {
@@ -780,6 +781,7 @@ export function executeNpcTurn(
           alignment: newRace.baseAlignment,
           diplomacy: {},
           color: newRace.color,
+          coatOfArms: generateCoatOfArms(`Empire of the ${newRace.demonym}`, newRace, npc.color),
         };
 
         currentCities.push(newCity);

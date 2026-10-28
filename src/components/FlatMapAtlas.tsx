@@ -22,7 +22,15 @@ import {
   Users,
   Crown,
   X,
+  Maximize2,
+  Minimize2,
+  Maximize,
+  Scroll,
 } from 'lucide-react';
+import { CoatOfArmsView } from './CoatOfArmsView';
+import { ensureCivCoatOfArms } from '../simulation/heraldry';
+
+export type AtlasSizeMode = 'standard' | 'wide' | 'fullscreen';
 
 interface FlatMapAtlasProps {
   cells: WorldCell[];
@@ -77,6 +85,30 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
   const [showResourceOverlay, setShowResourceOverlay] = useState<boolean>(true);
   const [isDraggingSelection, setIsDraggingSelection] = useState<boolean>(false);
   const isDraggingRef = useRef(false);
+
+  // Dynamic screen sizing for large screens (can fill 100% of the view section)
+  const [sizeMode, setSizeMode] = useState<AtlasSizeMode>(() => {
+    try {
+      const saved = localStorage.getItem('meglin_atlas_size_mode');
+      if (saved === 'standard' || saved === 'wide' || saved === 'fullscreen') {
+        return saved as AtlasSizeMode;
+      }
+    } catch {
+      // ignore
+    }
+    return typeof window !== 'undefined' && window.innerWidth >= 1400 ? 'wide' : 'standard';
+  });
+
+  const handleSetSizeMode = (mode: AtlasSizeMode) => {
+    setSizeMode(mode);
+    try {
+      localStorage.setItem('meglin_atlas_size_mode', mode);
+    } catch {
+      // ignore
+    }
+  };
+
+  const [showHeraldryModal, setShowHeraldryModal] = useState<boolean>(false);
 
   // Persistent, hover-activated settlement tooltip state
   const [hoveredSettlementId, setHoveredSettlementId] = useState<string | null>(null);
@@ -170,8 +202,22 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
   };
 
   return (
-    <div className="w-full h-full flex flex-col items-center justify-between p-2 sm:p-4 bg-slate-950 overflow-auto text-slate-100">
-      <div className="relative border border-amber-900/60 rounded-2xl p-3 sm:p-4 bg-[#1a1713] shadow-2xl max-w-6xl w-full flex flex-col gap-3">
+    <div
+      className={`w-full h-full flex flex-col bg-slate-950 overflow-auto text-slate-100 transition-all duration-200 ${
+        sizeMode === 'fullscreen'
+          ? 'p-1 sm:p-2 items-stretch justify-start'
+          : 'p-2 sm:p-4 items-center justify-between'
+      }`}
+    >
+      <div
+        className={`relative border border-amber-900/60 rounded-2xl bg-[#1a1713] shadow-2xl flex flex-col gap-3 transition-all duration-300 ${
+          sizeMode === 'fullscreen'
+            ? 'w-full max-w-none flex-1 p-2 sm:p-3 justify-between'
+            : sizeMode === 'wide'
+            ? 'w-full max-w-[1600px] p-3 sm:p-4'
+            : 'w-full max-w-6xl p-3 sm:p-4'
+        }`}
+      >
         {/* Parchment Header & Resource Toolbar */}
         <div className="flex flex-wrap items-center justify-between pb-2.5 border-b border-amber-800/40 text-amber-200 gap-2">
           <div>
@@ -183,7 +229,7 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {/* Multi-Selection Counter & Clear Indicator */}
             {activeSelectedIndices.length > 1 && (
               <div className="flex items-center gap-2 px-2.5 py-1 rounded-xl bg-amber-950/80 border border-amber-500/70 text-xs shadow-md">
@@ -204,10 +250,62 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
               </div>
             )}
 
+            {/* Civilization Coats of Arms / Heraldry Gallery Button */}
+            {civilizations.length > 0 && (
+              <button
+                onClick={() => setShowHeraldryModal(true)}
+                className="px-2.5 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 bg-slate-900/90 text-amber-300 border border-amber-700/60 hover:bg-amber-950/70 hover:border-amber-500 transition shadow-sm cursor-pointer"
+                title="Inspect Coats of Arms, heraldic blazons, and mottos of all established civilizations"
+              >
+                <Shield className="w-3.5 h-3.5 text-amber-400" />
+                <span>Heraldry ({civilizations.length} Realms)</span>
+              </button>
+            )}
+
+            {/* Atlas Viewport Size Selector for Large Displays */}
+            <div className="flex items-center bg-slate-900/90 border border-amber-800/60 rounded-xl p-0.5 text-xs shadow-sm">
+              <button
+                onClick={() => handleSetSizeMode('standard')}
+                className={`px-2 py-1 rounded-lg flex items-center gap-1 transition cursor-pointer ${
+                  sizeMode === 'standard'
+                    ? 'bg-amber-500/25 text-amber-300 font-bold border border-amber-500/50 shadow-inner'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Standard Boxed View (max 1152px)"
+              >
+                <Minimize2 className="w-3.5 h-3.5" />
+                <span className="hidden xl:inline text-[11px]">Standard</span>
+              </button>
+              <button
+                onClick={() => handleSetSizeMode('wide')}
+                className={`px-2 py-1 rounded-lg flex items-center gap-1 transition cursor-pointer ${
+                  sizeMode === 'wide'
+                    ? 'bg-amber-500/25 text-amber-300 font-bold border border-amber-500/50 shadow-inner'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Wide Expanded View (max 1600px)"
+              >
+                <Maximize className="w-3.5 h-3.5" />
+                <span className="hidden xl:inline text-[11px]">Wide</span>
+              </button>
+              <button
+                onClick={() => handleSetSizeMode('fullscreen')}
+                className={`px-2.5 py-1 rounded-lg flex items-center gap-1 transition cursor-pointer ${
+                  sizeMode === 'fullscreen'
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 font-bold shadow-md shadow-amber-500/20'
+                    : 'text-slate-300 hover:text-amber-300'
+                }`}
+                title="Fill View Space: Expands to take 100% of the viewport section for large screens"
+              >
+                <Maximize2 className="w-3.5 h-3.5" />
+                <span className="text-[11px] font-bold">Fill View Space</span>
+              </button>
+            </div>
+
             {/* Quick Toggle for High-Visibility Resource Overlay */}
             <button
               onClick={() => setShowResourceOverlay(!showResourceOverlay)}
-              className={`px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border ${
+              className={`px-3 py-1 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition border cursor-pointer ${
                 showResourceOverlay
                   ? 'bg-amber-500/20 text-amber-300 border-amber-500/50 shadow-md shadow-amber-500/10'
                   : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-white'
@@ -215,7 +313,8 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
               title="Toggle prominent resource node icons and glimmers"
             >
               <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-              <span>Resources ({totalResourceNodes} Nodes)</span>
+              <span className="hidden sm:inline">Resources</span>
+              <span>({totalResourceNodes})</span>
               <span className={`w-2 h-2 rounded-full ${showResourceOverlay ? 'bg-amber-400 animate-pulse' : 'bg-slate-600'}`} />
             </button>
           </div>
@@ -230,12 +329,13 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
         </div>
 
         {/* The 2D Cylindrical Grid Canvas & Bounded Tooltip Wrapper */}
-        <div className="relative w-full rounded-xl select-none">
+        <div className={`relative rounded-xl select-none ${sizeMode === 'fullscreen' ? 'w-full flex-1 flex items-center justify-center' : 'w-full'}`}>
           <div
             className="grid gap-[1px] bg-amber-950/50 rounded-xl overflow-hidden select-none border border-amber-900/50 shadow-inner w-full"
             style={{
               gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))`,
               aspectRatio: '2 / 1',
+              maxHeight: sizeMode === 'fullscreen' ? 'calc(100vh - 200px)' : undefined,
             }}
             onMouseLeave={() => {
               setHoveredCellIndex(null);
@@ -406,30 +506,46 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
                 }, 250);
               }}
             >
-              {/* Header */}
+              {/* Header with Coat of Arms & Settlement Identity */}
               <div className="flex items-center justify-between pb-1.5 border-b border-amber-900/40">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {activeSettlement.status === 'ruined' ? (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-950/80 text-red-300 border border-red-500/50 flex items-center gap-1">
-                      <span>🏚</span> Ancient Ruin
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/50 flex items-center gap-1">
-                      <span>🏛</span> Settlement
-                    </span>
-                  )}
+                <div className="flex items-center gap-2.5">
                   {activeSettlementCiv && (
-                    <span
-                      className="px-1.5 py-0.5 rounded text-[9px] font-medium border"
-                      style={{
-                        borderColor: `${activeSettlementCiv.color}60`,
-                        color: activeSettlementCiv.color,
-                        backgroundColor: `${activeSettlementCiv.color}15`,
-                      }}
-                    >
-                      {activeSettlementCiv.name}
-                    </span>
+                    <CoatOfArmsView
+                      coatOfArms={ensureCivCoatOfArms(activeSettlementCiv, activeSettlementRace || undefined)}
+                      size="sm"
+                      showMotto={false}
+                    />
                   )}
+                  <div className="flex flex-col">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {activeSettlement.status === 'ruined' ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-950/80 text-red-300 border border-red-500/50 flex items-center gap-1">
+                          <span>🏚</span> Ancient Ruin
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/50 flex items-center gap-1">
+                          <span>🏛</span> Settlement
+                        </span>
+                      )}
+                      {activeSettlementCiv && (
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[9px] font-medium border"
+                          style={{
+                            borderColor: `${activeSettlementCiv.color}60`,
+                            color: activeSettlementCiv.color,
+                            backgroundColor: `${activeSettlementCiv.color}15`,
+                          }}
+                        >
+                          {activeSettlementCiv.name}
+                        </span>
+                      )}
+                    </div>
+                    {activeSettlementCiv && (
+                      <span className="text-[10px] text-amber-200/80 font-serif italic mt-0.5 truncate max-w-[210px]">
+                        "{ensureCivCoatOfArms(activeSettlementCiv, activeSettlementRace || undefined).motto}"
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -636,6 +752,37 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
                 </div>
               </div>
 
+              {/* Civilization Coat of Arms & Realm Identity */}
+              {inspectedCiv && (
+                <div className="flex items-center gap-2.5 bg-slate-900/90 border border-slate-800 p-2 rounded-xl shadow-inner">
+                  <CoatOfArmsView
+                    coatOfArms={ensureCivCoatOfArms(inspectedCiv, races?.find((r) => r.id === inspectedCiv.raceId))}
+                    size="sm"
+                    showMotto={false}
+                  />
+                  <div className="text-left">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-bold text-amber-300 text-xs truncate max-w-[150px]">
+                        {inspectedCiv.name}
+                      </span>
+                      <span
+                        className="px-1.5 py-0.2 rounded text-[9px] font-semibold border"
+                        style={{
+                          color: inspectedCiv.color,
+                          borderColor: `${inspectedCiv.color}50`,
+                          backgroundColor: `${inspectedCiv.color}15`,
+                        }}
+                      >
+                        Realm
+                      </span>
+                    </div>
+                    <span className="text-[10px] text-amber-200/80 font-serif italic block truncate max-w-[180px]">
+                      "{ensureCivCoatOfArms(inspectedCiv, races?.find((r) => r.id === inspectedCiv.raceId)).motto}"
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Resource Highlight Badge */}
               <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-800 p-2 rounded-xl">
                 {inspectedResourceMeta ? (
@@ -733,6 +880,110 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Heraldic Hall of Realms & Coats of Arms Showcase Modal */}
+      {showHeraldryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm animate-fade-in">
+          <div className="relative w-full max-w-4xl max-h-[88vh] bg-slate-950 border-2 border-amber-600/70 rounded-2xl p-5 sm:p-6 shadow-2xl flex flex-col gap-4 overflow-hidden text-slate-100">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-amber-800/40">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300">
+                  <Shield className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-serif font-bold text-lg text-amber-200 uppercase tracking-wider flex items-center gap-2">
+                    Heraldic Hall of Realms & Coats of Arms
+                  </h3>
+                  <p className="text-xs text-amber-300/70">
+                    Sovereign emblems, heraldic charges, and mottos of every established world civilization
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowHeraldryModal(false)}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Realms Grid */}
+            <div className="flex-1 overflow-y-auto pr-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+              {civilizations.map((civ) => {
+                const civRace = races?.find((r) => r.id === civ.raceId) || PRESET_RACES.find((r) => r.id === civ.raceId);
+                const coat = ensureCivCoatOfArms(civ, civRace);
+                const capCity = cities.find((c) => c.id === civ.capitalCityId);
+                const civCities = cities.filter((c) => civ.cityIds.includes(c.id));
+                const totalPop = civCities.reduce((sum, c) => sum + c.population, 0);
+
+                return (
+                  <div
+                    key={civ.id}
+                    className="p-4 rounded-xl bg-slate-900/90 border border-amber-900/60 flex items-start gap-4 shadow-lg hover:border-amber-500/60 transition"
+                  >
+                    {/* Coat of Arms Shield */}
+                    <div className="flex-shrink-0 pt-1">
+                      <CoatOfArmsView coatOfArms={coat} size="lg" showMotto={false} />
+                    </div>
+
+                    {/* Realm Metadata */}
+                    <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="font-serif font-bold text-base text-amber-300 truncate">
+                          {civ.name}
+                        </h4>
+                        <span
+                          className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider border flex-shrink-0"
+                          style={{
+                            borderColor: `${civ.color}70`,
+                            color: civ.color,
+                            backgroundColor: `${civ.color}15`,
+                          }}
+                        >
+                          {civRace?.name || 'Mortal'}
+                        </span>
+                      </div>
+
+                      {/* Motto Ribbon */}
+                      <div className="px-2.5 py-1 rounded bg-amber-950/70 border border-amber-600/40 text-xs text-amber-200 font-serif italic shadow-inner">
+                        "{coat.motto}"
+                      </div>
+
+                      {/* Blazon */}
+                      <p className="text-[11px] text-slate-300 leading-snug font-sans">
+                        <span className="text-amber-400 font-medium">Heraldic Blazon:</span> {coat.blazon}
+                      </p>
+
+                      {/* Demographics & Capital */}
+                      <div className="text-[11px] text-slate-400 flex flex-wrap items-center gap-x-3 gap-y-1 pt-1 border-t border-slate-800">
+                        {capCity && <span>Capital: <strong className="text-white">{capCity.name}</strong></span>}
+                        <span>Settlements: <strong className="text-white">{civCities.length}</strong></span>
+                        <span>Total Pop: <strong className="text-amber-300">{totalPop.toLocaleString()}</strong></span>
+                      </div>
+
+                      {/* Technologies */}
+                      {civ.technologies.length > 0 && (
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {civ.technologies.map((tech) => (
+                            <span
+                              key={tech}
+                              className="px-1.5 py-0.5 rounded text-[9px] bg-slate-800 text-slate-300 border border-slate-700"
+                            >
+                              {tech}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

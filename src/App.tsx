@@ -48,6 +48,7 @@ import {
 } from './simulation/worldGrid';
 import { INITIAL_DEITIES, executeNpcTurn, buildCustomPantheon } from './simulation/npcDeities';
 import { applyMiracle } from './simulation/miracles';
+import { generateCoatOfArms } from './simulation/heraldry';
 import {
   calculateTradeRoutes,
   detectTerritorialFriction,
@@ -158,6 +159,7 @@ export default function App() {
   const [isPantheonOpen, setIsPantheonOpen] = useState(false);
   const [isNewGameModalOpen, setIsNewGameModalOpen] = useState(false);
   const [isSaveLoadModalOpen, setIsSaveLoadModalOpen] = useState(false);
+  const [isPowersDrawerOpen, setIsPowersDrawerOpen] = useState(true);
   const [activeBattleResult, setActiveBattleResult] = useState<BattleResult | null>(null);
 
   const playerDeity = deities.find((d) => d.isPlayer) || deities[0];
@@ -773,6 +775,8 @@ export default function App() {
       status: 'prospering',
     };
 
+    const coatOfArms = generateCoatOfArms(`Grand Realm of the ${newRace.demonym}`, newRace, playerDeity.color);
+
     const newCiv: Civilization = {
       id: civId,
       name: `Grand Realm of the ${newRace.demonym}`,
@@ -785,6 +789,7 @@ export default function App() {
       alignment: newRace.baseAlignment,
       diplomacy: {},
       color: newRace.color,
+      coatOfArms,
     };
 
     setRaces((prev) => [...prev, newRace]);
@@ -1282,38 +1287,43 @@ export default function App() {
       />
 
       {/* Main World Viewport: Interactive 3D Globe or 2D Tabletop Atlas */}
-      <main className="relative flex-1 w-full h-full overflow-hidden">
-        {is3DMode ? (
-          <WorldGlobe
-            cells={cells}
-            cities={cities}
-            civilizations={civilizations}
-            armies={armies}
-            avatars={avatars}
-            tradeRoutes={tradeRoutes}
-            conflicts={conflicts}
-            selectedCellIndex={selectedCellIndex}
-            selectedCellIndices={selectedCellIndices}
-            onSelectCell={handleSelectCell}
-            onClearSelection={handleClearSelection}
-            viewMode={mapViewMode}
-          />
-        ) : (
-          <FlatMapAtlas
-            cells={cells}
-            cities={cities}
-            civilizations={civilizations}
-            races={races}
-            selectedCellIndex={selectedCellIndex}
-            selectedCellIndices={selectedCellIndices}
-            onSelectCell={handleSelectCell}
-            onClearSelection={handleClearSelection}
-            viewMode={mapViewMode}
-          />
-        )}
+      <main className="relative flex-1 w-full h-full overflow-hidden flex flex-row">
+        {/* Map Viewport Area: Flex child that takes remaining width and moves left when drawer opens */}
+        <div className="relative flex-1 h-full min-w-0 overflow-hidden flex flex-col transition-all duration-300 ease-in-out">
+          {is3DMode ? (
+            <WorldGlobe
+              cells={cells}
+              cities={cities}
+              civilizations={civilizations}
+              armies={armies}
+              avatars={avatars}
+              tradeRoutes={tradeRoutes}
+              conflicts={conflicts}
+              selectedCellIndex={selectedCellIndex}
+              selectedCellIndices={selectedCellIndices}
+              onSelectCell={handleSelectCell}
+              onClearSelection={handleClearSelection}
+              viewMode={mapViewMode}
+            />
+          ) : (
+            <FlatMapAtlas
+              cells={cells}
+              cities={cities}
+              civilizations={civilizations}
+              races={races}
+              selectedCellIndex={selectedCellIndex}
+              selectedCellIndices={selectedCellIndices}
+              onSelectCell={handleSelectCell}
+              onClearSelection={handleClearSelection}
+              viewMode={mapViewMode}
+            />
+          )}
+        </div>
 
-        {/* Collapsible Divine Powers Drawer (Contained cleanly within main viewport) */}
+        {/* Collapsible Divine Powers Drawer (Sits alongside map without overlapping) */}
         <ControlDock
+          isOpen={isPowersDrawerOpen}
+          onToggleOpen={setIsPowersDrawerOpen}
           currentAge={currentAge}
           playerPower={playerDeity.power}
           selectedCell={selectedCell}
