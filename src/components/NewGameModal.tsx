@@ -37,6 +37,7 @@ import {
   Wand2,
   Maximize2,
   Shuffle,
+  Skull,
 } from 'lucide-react';
 
 import {
@@ -59,6 +60,7 @@ interface NewGameModalProps {
     customNpcs?: Deity[];
     customTechTree?: Record<TechCategory, TechItem[]>;
     startTutorial?: boolean;
+    monstrousSpawnChance?: number;
   }) => void;
 }
 
@@ -83,6 +85,7 @@ export const NewGameModal: React.FC<NewGameModalProps> = ({
   const [mapSize, setMapSize] = useState<MapSizeType>('medium');
   const [worldSeed, setWorldSeed] = useState<string>(() => generateRandomSeed());
   const [randomizeOnStart, setRandomizeOnStart] = useState<boolean>(true);
+  const [monstrousSpawnChance, setMonstrousSpawnChance] = useState<number>(10);
   const [launchTutorial, setLaunchTutorial] = useState<boolean>(() => {
     return !localStorage.getItem('meglin_tutorial_completed');
   });
@@ -302,6 +305,7 @@ export const NewGameModal: React.FC<NewGameModalProps> = ({
       customNpcs,
       customTechTree: techTreeData,
       startTutorial: launchTutorial,
+      monstrousSpawnChance,
     });
     onClose();
   };
@@ -533,6 +537,75 @@ export const NewGameModal: React.FC<NewGameModalProps> = ({
             <p className="text-[10px] text-slate-500 leading-relaxed">
               Same seed + archetype produces the identical world topography, climate belts, and resource caches. Turning on 'Randomize' guarantees a fresh unpredictable world generation whenever you press Start.
             </p>
+          </div>
+
+          {/* 1d. Primordial Danger: Monstrous Race Emergence (Age of Races) */}
+          <div className="p-3.5 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold font-serif text-amber-300 flex items-center gap-1.5">
+                <Skull className="w-3.5 h-3.5 text-red-400" /> Natural Monstrous Race Emergence (Age of Races)
+              </label>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-mono font-bold text-red-400">
+                  {monstrousSpawnChance}% chance / round
+                </span>
+                {monstrousSpawnChance === 10 && (
+                  <span className="px-1.5 py-0.2 rounded bg-amber-500/20 text-amber-300 text-[9px] font-semibold border border-amber-500/30">
+                    Default
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <input
+                  type="range"
+                  min="0"
+                  max="40"
+                  step="5"
+                  value={monstrousSpawnChance}
+                  onChange={(e) => setMonstrousSpawnChance(Number(e.target.value))}
+                  className="w-full h-1.5 rounded-lg appearance-none cursor-pointer bg-slate-800 accent-red-500"
+                />
+              </div>
+
+              {/* Quick preset chips */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {[
+                  { label: '0% Peaceful', val: 0 },
+                  { label: '5% Rare', val: 5 },
+                  { label: '10% Standard (Default)', val: 10 },
+                  { label: '20% Hostile', val: 20 },
+                  { label: '35% Abyssal Swarm', val: 35 },
+                ].map((preset) => (
+                  <button
+                    key={preset.val}
+                    type="button"
+                    onClick={() => setMonstrousSpawnChance(preset.val)}
+                    className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition border ${
+                      monstrousSpawnChance === preset.val
+                        ? 'bg-red-950 text-red-300 border-red-500/60 shadow-sm'
+                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200 hover:bg-slate-850'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800/80 text-[10px] text-slate-400 leading-relaxed space-y-1">
+              <div className="text-slate-300 font-semibold flex items-center gap-1">
+                Thematic Biome Spawning:
+              </div>
+              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-2 gap-y-0.5 text-[9.5px]">
+                <li><span className="text-emerald-400 font-medium">Goblins & Orcs:</span> Mountains, Hills, Plains, Forests</li>
+                <li><span className="text-orange-400 font-medium">Kobolds:</span> Mountains & Volcanic Crags</li>
+                <li><span className="text-red-400 font-medium">Dragons:</span> Mountains, Volcanic, Arctic Glaciers</li>
+                <li><span className="text-teal-400 font-medium">Troglodytes:</span> Swamps & Gloomy Wetlands</li>
+              </ul>
+            </div>
           </div>
 
           {/* 2. Player Deity Customization */}

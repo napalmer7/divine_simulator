@@ -372,4 +372,5 @@ export interface SavedGameSlot {
   history: HistoryLogEntry[];
   mapViewMode: MapViewMode;
   is3DMode: boolean;
+  monstrousSpawnChance?: number;
 }

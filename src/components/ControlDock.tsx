@@ -36,6 +36,8 @@ import {
   X,
   HelpCircle,
   Layers,
+  Skull,
+  Ghost,
 } from 'lucide-react';
 
 interface ControlDockProps {
@@ -48,6 +50,8 @@ interface ControlDockProps {
   onOpenMiracleWeaver: () => void;
   onOpenTechTree?: () => void;
   onOpenRaceEvolution?: () => void;
+  onOpenCurseRace?: () => void;
+  onOpenCreateOrder?: () => void;
   onRebuildRuin?: () => void;
   isRuinSelected?: boolean;
   ruinedCityName?: string;
@@ -69,6 +73,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
   onOpenMiracleWeaver,
   onOpenTechTree,
   onOpenRaceEvolution,
+  onOpenCurseRace,
+  onOpenCreateOrder,
   onRebuildRuin,
   isRuinSelected = false,
   ruinedCityName,
@@ -670,6 +676,35 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                   </button>
                 )}
 
+                {/* Curse & Corrupt Race (2nd & 3rd Age) */}
+                {currentAge !== '1st_age_land' && onOpenCurseRace && (
+                  <button
+                    onClick={onOpenCurseRace}
+                    disabled={playerPower < costs.create_subrace[currentAge]}
+                    className="w-full p-3.5 rounded-xl bg-gradient-to-r from-purple-950/80 via-slate-950 to-red-950/70 hover:from-purple-900/90 hover:to-red-900/80 disabled:opacity-40 border border-purple-500/60 flex items-center justify-between transition shadow"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400 border border-purple-500/40">
+                        <Skull className="w-4 h-4" />
+                      </div>
+                      <div className="text-left">
+                        <div className="font-bold text-purple-200 text-xs flex items-center gap-1.5">
+                          Curse & Corrupt Race
+                          <span className="px-1.5 py-0.5 rounded bg-purple-950 text-purple-300 text-[9px] border border-purple-500/40 font-mono">
+                            Evil Evolution
+                          </span>
+                        </div>
+                        <div className="text-[10px] text-slate-400">
+                          Birth Dark Elves, Deep Dwarves, Undead, or Fell Abominations
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-purple-300 font-bold text-xs font-mono">
+                      {costs.create_subrace[currentAge]} Power
+                    </span>
+                  </button>
+                )}
+
                 {/* Cultural Interventions */}
                 <div className="space-y-2 pt-1">
                   <div className="text-[11px] font-semibold text-slate-300">
@@ -833,7 +868,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                 </button>
 
                 <button
-                  onClick={() => onExecuteAction('create_order')}
+                  onClick={onOpenCreateOrder ? onOpenCreateOrder : () => onExecuteAction('create_order')}
                   disabled={playerPower < costs.create_order[currentAge]}
                   className="w-full p-3 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-slate-700/80 flex items-center justify-between text-left transition"
                 >

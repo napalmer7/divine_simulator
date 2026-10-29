@@ -78,6 +78,10 @@ import { PantheonDrawer } from './components/PantheonDrawer';
 import { NewGameModal } from './components/NewGameModal';
 import { SaveLoadModal } from './components/SaveLoadModal';
 import { TutorialWalkthrough, WelcomeTutorialModal } from './components/TutorialWalkthrough';
+import { OrderCreationModal } from './components/OrderCreationModal';
+import { CivilizationsModal } from './components/CivilizationsModal';
+import { CurseRaceModal } from './components/CurseRaceModal';
+import { checkAndSpawnMonstrousRace } from './simulation/monstrousRaces';
 
 export default function App() {
   // World Grid & Entities State
@@ -153,10 +157,14 @@ export default function App() {
   const [currentWorldStructure, setCurrentWorldStructure] = useState<WorldStructureType>('continental');
   const [mapSize, setMapSize] = useState<MapSizeType>('medium');
   const [worldSeed, setWorldSeed] = useState<string>('Genesis-Prime');
+  const [worldName, setWorldName] = useState<string>('Meglin');
+  const [ageStartRound, setAgeStartRound] = useState<number>(1);
+  const [monstrousSpawnChance, setMonstrousSpawnChance] = useState<number>(10);
 
   const [isRaceModalOpen, setIsRaceModalOpen] = useState(false);
   const [isMiracleModalOpen, setIsMiracleModalOpen] = useState(false);
   const [isRaceEvolutionOpen, setIsRaceEvolutionOpen] = useState(false);
+  const [isCurseModalOpen, setIsCurseModalOpen] = useState(false);
   const [isTechTreeOpen, setIsTechTreeOpen] = useState(false);
   const [techTreeData, setTechTreeData] = useState<Record<TechCategory, TechItem[]>>(DEFAULT_TECH_TREE);
   const [isChronicleOpen, setIsChronicleOpen] = useState(false);
@@ -164,6 +172,8 @@ export default function App() {
   const [isNewGameModalOpen, setIsNewGameModalOpen] = useState(false);
   const [isSaveLoadModalOpen, setIsSaveLoadModalOpen] = useState(false);
   const [isPowersDrawerOpen, setIsPowersDrawerOpen] = useState(true);
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
+  const [isCivilizationsModalOpen, setIsCivilizationsModalOpen] = useState(false);
   const [activeBattleResult, setActiveBattleResult] = useState<BattleResult | null>(null);
   const [isTutorialActive, setIsTutorialActive] = useState<boolean>(false);
   const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState<boolean>(() => {
@@ -178,7 +188,13 @@ export default function App() {
   const isRuinSelected = selectedCity?.status === 'ruined';
   const ruinedCityName = selectedCity?.name;
 
-  const canAdvanceAge = round >= 5;
+  const roundsInCurrentAge = Math.max(1, round - ageStartRound + 1);
+  const canAdvanceAge =
+    currentAge === '1st_age_land'
+      ? roundsInCurrentAge >= 5
+      : currentAge === '2nd_age_races'
+      ? roundsInCurrentAge >= 5 && (races.length >= 1 || cities.length >= 1)
+      : false;
 
   // Update dynamic geopolitical state (trade & friction) whenever cities or civs change
   useEffect(() => {
@@ -246,6 +262,36 @@ export default function App() {
             category: 'civilization',
           }));
           setHistory((prev) => [...expansionLogs, ...prev]);
+        }
+      }
+
+      // 2b. Spontaneous Awakening of Monstrous Races (Age of Races only)
+      if (currentAge === '2nd_age_races') {
+        const monsterResult = checkAndSpawnMonstrousRace({
+          cells: simulationCells,
+          cities: simulationCities,
+          civilizations: simulationCivs,
+          races,
+          round: nextRound,
+          year: nextYear,
+          currentAge,
+          monstrousSpawnChance,
+          deities,
+        });
+
+        if (
+          monsterResult.spawned &&
+          monsterResult.newRace &&
+          monsterResult.newCity &&
+          monsterResult.newCiv
+        ) {
+          simulationCells = monsterResult.updatedCells || simulationCells;
+          simulationCities = [...simulationCities, monsterResult.newCity];
+          simulationCivs = [...simulationCivs, monsterResult.newCiv];
+          setRaces((prev) => [...prev, monsterResult.newRace!]);
+          if (monsterResult.logEntry) {
+            setHistory((prev) => [monsterResult.logEntry!, ...prev]);
+          }
         }
       }
 
@@ -385,6 +431,7 @@ export default function App() {
     races,
     armies,
     deities,
+    monstrousSpawnChance,
   ]);
 
   // Automatically execute turn if active deity is an NPC
@@ -633,6 +680,162 @@ export default function App() {
       },
       ...prev,
     ]);
+  };
+
+  // Player Action: Curse & Corrupt Mortal Race (e.g. Elves -> Dark Elves, Dwarves -> Deep Dwarves, Humans -> Undead)
+  const handleCurseRace = ({
+    parentRace,
+    curasedRace,
+    corruptionScope,
+    targetCityId,
+    targetCellIndex,
+    cost,
+  }: {
+    parentRace: Race;
+    curasedRace: Race;
+    corruptionScope: 'splinter_realm' | 'total_corruption';
+    targetCityId?: string;
+    targetCellIndex?: number;
+    cost: number;
+  }) => {
+    if (playerDeity.power < cost) return;
+    deductPlayerPower(cost);
+
+    setRaces((prev) => [...prev, curasedRace]);
+
+    if (corruptionScope === 'total_corruption') {
+      const parentCiv = civilizations.find((c) => c.raceId === parentRace.id);
+      const evilCivName = `The Dark Domain of ${curasedRace.name}`;
+      const evilCoatOfArms = generateCoatOfArms(evilCivName, curasedRace, curasedRace.color);
+
+      // Convert all cities of this civilization
+      setCities((prev) =>
+        prev.map((c) =>
+          c.raceId === parentRace.id
+            ? {
+                ...c,
+                raceId: curasedRace.id,
+                alignment: curasedRace.baseAlignment,
+                defense: c.defense + 1,
+              }
+            : c
+        )
+      );
+
+      // Update civilization
+      setCivilizations((prev) =>
+        prev.map((civ) =>
+          civ.raceId === parentRace.id
+            ? {
+                ...civ,
+                name: evilCivName,
+                raceId: curasedRace.id,
+                alignment: curasedRace.baseAlignment,
+                color: curasedRace.color,
+                coatOfArms: evilCoatOfArms,
+              }
+            : civ
+        )
+      );
+
+      // Update cells
+      setCells((prev) =>
+        prev.map((cell) =>
+          parentCiv && cell.civilizationId === parentCiv.id
+            ? { ...cell, alignment: curasedRace.baseAlignment }
+            : cell
+        )
+      );
+
+      setHistory((prev) => [
+        {
+          id: `curse_${Date.now()}`,
+          age: currentAge,
+          round,
+          year,
+          deityId: playerDeity.id,
+          deityName: playerDeity.name,
+          deityColor: playerDeity.color,
+          actionType: 'Curse Race',
+          cost,
+          title: `Great Divine Curse: The Awakening of the ${curasedRace.name}!`,
+          description: `${playerDeity.name} cast an ancient malevolent curse upon the ${parentRace.name}, mutating the entire mortal empire into the sinister ${curasedRace.name}.`,
+          impact: `All realm settlements corrupted with alignment ${curasedRace.baseAlignment}. Sinister traits awakened.`,
+          category: 'life',
+        },
+        ...prev,
+      ]);
+    } else {
+      // Splinter heresy realm
+      const targetCity =
+        cities.find((c) => c.id === targetCityId) ||
+        cities.find((c) => c.raceId === parentRace.id);
+
+      const newCivId = `civ_cursed_${Date.now()}`;
+      const evilCivName = `${curasedRace.name} Domain`;
+      const evilCoatOfArms = generateCoatOfArms(evilCivName, curasedRace, curasedRace.color);
+
+      if (targetCity) {
+        const newCiv: Civilization = {
+          id: newCivId,
+          name: evilCivName,
+          raceId: curasedRace.id,
+          creatorDeityId: playerDeity.id,
+          capitalCityId: targetCity.id,
+          cityIds: [targetCity.id],
+          technologies: ['Shadow Lore', 'Iron War-Smithing'],
+          orders: [],
+          alignment: curasedRace.baseAlignment,
+          diplomacy: {},
+          color: curasedRace.color,
+          coatOfArms: evilCoatOfArms,
+        };
+
+        setCities((prev) =>
+          prev.map((c) =>
+            c.id === targetCity.id
+              ? {
+                  ...c,
+                  name: `Cursed ${c.name}`,
+                  civilizationId: newCivId,
+                  raceId: curasedRace.id,
+                  alignment: curasedRace.baseAlignment,
+                  defense: c.defense + 2,
+                }
+              : c
+          )
+        );
+
+        setCivilizations((prev) => [...prev, newCiv]);
+
+        setCells((prev) =>
+          prev.map((c) =>
+            c.index === targetCity.cellIndex
+              ? { ...c, civilizationId: newCivId, alignment: curasedRace.baseAlignment }
+              : c
+          )
+        );
+      }
+
+      setHistory((prev) => [
+        {
+          id: `curse_${Date.now()}`,
+          age: currentAge,
+          round,
+          year,
+          deityId: playerDeity.id,
+          deityName: playerDeity.name,
+          deityColor: playerDeity.color,
+          actionType: 'Curse Race',
+          cost,
+          title: `Heretical Corruption: ${curasedRace.name} Emerged`,
+          description: `${playerDeity.name} whispered abyssal blasphemies into the heart of ${targetCity?.name || 'the realm'}, splitting the ${parentRace.name} and birthing the ${curasedRace.name}.`,
+          impact: `New corrupted civilization established with alignment ${curasedRace.baseAlignment}.`,
+          category: 'life',
+        },
+        ...prev,
+      ]);
+    }
   };
 
   // Player Action: 5-Tier Tech Research Breakthrough
@@ -1064,15 +1267,75 @@ export default function App() {
         },
         ...prev,
       ]);
+    } else if (actionType === 'create_order') {
+      setIsOrderModalOpen(true);
     }
   };
 
-  // Age Advancement
+  // Player Action: Found Holy or Arcane Order
+  const handleFoundOrder = (newOrder: OrderItem, cost: number) => {
+    if (playerDeity.power < cost) return;
+    deductPlayerPower(cost);
+
+    setOrders((prev) => [...prev, newOrder]);
+
+    // Enhance host city
+    setCities((prev) =>
+      prev.map((c) => {
+        if (c.id === newOrder.cityId) {
+          const typeBonusDefense = newOrder.type === 'knightly_order' ? 2 : 1;
+          const typeBonusWealth = newOrder.type === 'thieves_guild' ? 35 : 15;
+          return {
+            ...c,
+            defense: c.defense + typeBonusDefense,
+            wealth: c.wealth + typeBonusWealth,
+            wonders: [...c.wonders, `${newOrder.name}`],
+          };
+        }
+        return c;
+      })
+    );
+
+    // Enhance parent civ
+    setCivilizations((prev) =>
+      prev.map((civ) => {
+        if (civ.id === newOrder.civilizationId) {
+          return {
+            ...civ,
+            orders: [...(civ.orders || []), newOrder.name],
+          };
+        }
+        return civ;
+      })
+    );
+
+    const hostCity = cities.find((c) => c.id === newOrder.cityId);
+    const log: HistoryLogEntry = {
+      id: `order_${Date.now()}`,
+      age: currentAge,
+      round,
+      year,
+      deityId: playerDeity.id,
+      deityName: playerDeity.name,
+      deityColor: playerDeity.color,
+      actionType: 'Create Order',
+      cost,
+      title: `${playerDeity.name} Founded ${newOrder.name}`,
+      description: newOrder.description,
+      impact: `Chapter house established in ${hostCity?.name || 'the realm'} (+defense & prestige).`,
+      category: 'civilization',
+    };
+    setHistory((prev) => [log, ...prev]);
+  };
+
+  // Age Advancement with Round Reset per Epoch
   const handleAdvanceAge = () => {
     if (currentAge === '1st_age_land') {
       setCurrentAge('2nd_age_races');
+      setAgeStartRound(round + 1);
     } else if (currentAge === '2nd_age_races') {
       setCurrentAge('3rd_age_relations');
+      setAgeStartRound(round + 1);
     }
 
     setHistory((prev) => [
@@ -1184,6 +1447,7 @@ export default function App() {
     customNpcs,
     customTechTree,
     startTutorial,
+    monstrousSpawnChance: newSpawnChance = 10,
   }: {
     worldStructure: WorldStructureType;
     mapSize: MapSizeType;
@@ -1194,6 +1458,7 @@ export default function App() {
     customNpcs?: Deity[];
     customTechTree?: Record<TechCategory, TechItem[]>;
     startTutorial?: boolean;
+    monstrousSpawnChance?: number;
   }) => {
     const newCells = generateInitialWorld(worldStructure, newMapSize, newWorldSeed);
     const newPantheon = buildCustomPantheon(newPlayerDeity, totalDeityCount, selectedNpcIds, customNpcs);
@@ -1203,6 +1468,7 @@ export default function App() {
       setTechTreeData(customTechTree);
     }
 
+    setMonstrousSpawnChance(newSpawnChance);
     setMapSize(newMapSize);
     setWorldSeed(newWorldSeed);
     setCurrentWorldStructure(worldStructure);
@@ -1256,6 +1522,11 @@ export default function App() {
     }
   };
 
+  const handleSelectCityOnMap = (cellIndex: number) => {
+    setSelectedCellIndices([cellIndex]);
+    setMapViewMode('political');
+  };
+
   // Load Game Handler
   const handleLoadGame = (slot: SavedGameSlot) => {
     setCells(slot.cells);
@@ -1279,6 +1550,7 @@ export default function App() {
     if (slot.worldSeed) setWorldSeed(slot.worldSeed);
     if (slot.mapViewMode) setMapViewMode(slot.mapViewMode);
     if (typeof slot.is3DMode === 'boolean') setIs3DMode(slot.is3DMode);
+    if (typeof slot.monstrousSpawnChance === 'number') setMonstrousSpawnChance(slot.monstrousSpawnChance);
 
     setHistory((prev) => [
       {
@@ -1304,12 +1576,15 @@ export default function App() {
     <div className="relative w-screen h-screen overflow-hidden flex flex-col bg-black text-slate-100 select-none font-sans">
       {/* Top Status Bar */}
       <TopStatusBar
+        worldName={worldName}
         currentAge={currentAge}
         round={round}
+        roundsInCurrentAge={roundsInCurrentAge}
         year={year}
         activeDeity={activeDeity}
         playerDeity={playerDeity}
         deityCount={deities.length}
+        civilizationsCount={civilizations.length}
         mapViewMode={mapViewMode}
         onSelectMapViewMode={setMapViewMode}
         is3DMode={is3DMode}
@@ -1319,6 +1594,7 @@ export default function App() {
         onAdvanceAge={handleAdvanceAge}
         onOpenChronicle={() => setIsChronicleOpen(true)}
         onOpenPantheon={() => setIsPantheonOpen(true)}
+        onOpenCivilizations={() => setIsCivilizationsModalOpen(true)}
         onOpenNewGame={() => setIsNewGameModalOpen(true)}
         onOpenSaveLoad={() => setIsSaveLoadModalOpen(true)}
         onOpenTutorial={() => setIsTutorialActive(true)}
@@ -1372,6 +1648,8 @@ export default function App() {
           onOpenMiracleWeaver={() => setIsMiracleModalOpen(true)}
           onOpenTechTree={() => setIsTechTreeOpen(true)}
           onOpenRaceEvolution={() => setIsRaceEvolutionOpen(true)}
+          onOpenCurseRace={() => setIsCurseModalOpen(true)}
+          onOpenCreateOrder={() => setIsOrderModalOpen(true)}
           onRebuildRuin={handleRebuildRuin}
           isRuinSelected={isRuinSelected}
           ruinedCityName={ruinedCityName}
@@ -1417,6 +1695,7 @@ export default function App() {
           history,
           mapViewMode,
           is3DMode,
+          monstrousSpawnChance,
         }}
         onLoadGame={handleLoadGame}
       />
@@ -1517,6 +1796,46 @@ export default function App() {
           setIsTutorialActive(true);
           localStorage.setItem('meglin_tutorial_completed', 'true');
         }}
+      />
+
+      {/* Order Creation Modal */}
+      <OrderCreationModal
+        isOpen={isOrderModalOpen}
+        onClose={() => setIsOrderModalOpen(false)}
+        currentAge={currentAge}
+        playerPower={playerDeity.power}
+        playerDeity={playerDeity}
+        civilizations={civilizations}
+        cities={cities}
+        onFoundOrder={handleFoundOrder}
+      />
+
+      {/* Civilizations Overview Modal */}
+      <CivilizationsModal
+        isOpen={isCivilizationsModalOpen}
+        onClose={() => setIsCivilizationsModalOpen(false)}
+        civilizations={civilizations}
+        cities={cities}
+        races={races}
+        deities={deities}
+        orders={orders}
+        onSelectCityOnMap={handleSelectCityOnMap}
+        onOpenRaceModal={() => setIsRaceModalOpen(true)}
+      />
+
+      {/* Curse & Corrupt Race Modal (Evil Evolution) */}
+      <CurseRaceModal
+        isOpen={isCurseModalOpen}
+        onClose={() => setIsCurseModalOpen(false)}
+        races={races}
+        civilizations={civilizations}
+        cities={cities}
+        cells={cells}
+        selectedCellIndex={selectedCellIndex}
+        playerPower={playerDeity.power}
+        currentAge={currentAge}
+        playerDeity={playerDeity}
+        onCurseRace={handleCurseRace}
       />
     </div>
   );
