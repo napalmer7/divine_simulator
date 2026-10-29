@@ -16,6 +16,7 @@ import {
   Save,
   PlusCircle,
   Gem,
+  HelpCircle,
 } from 'lucide-react';
 
 interface TopStatusBarProps {
@@ -36,6 +37,8 @@ interface TopStatusBarProps {
   onOpenPantheon: () => void;
   onOpenNewGame: () => void;
   onOpenSaveLoad: () => void;
+  onOpenTutorial?: () => void;
+  isTutorialActive?: boolean;
 }
 
 export const TopStatusBar: React.FC<TopStatusBarProps> = ({
@@ -56,6 +59,8 @@ export const TopStatusBar: React.FC<TopStatusBarProps> = ({
   onOpenPantheon,
   onOpenNewGame,
   onOpenSaveLoad,
+  onOpenTutorial,
+  isTutorialActive = false,
 }) => {
   const ageInfo = AGES[currentAge];
 
@@ -120,7 +125,7 @@ export const TopStatusBar: React.FC<TopStatusBarProps> = ({
         </div>
 
         {/* Center: Map Layer Filters & 3D/2D switch */}
-        <div className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 overflow-x-auto">
+        <div data-tutorial="map-layers" className="flex items-center gap-1 bg-slate-900/90 p-1 rounded-xl border border-slate-800 overflow-x-auto">
           <div className="flex items-center gap-1 mr-1 pl-1 text-[11px] text-slate-400 font-medium">
             <Layers className="w-3.5 h-3.5 text-indigo-400" />
           </div>
@@ -142,6 +147,7 @@ export const TopStatusBar: React.FC<TopStatusBarProps> = ({
 
           {/* Slider Style Toggle: 2D World Atlas <--> 3D Globe */}
           <div
+            data-tutorial="view-toggle"
             onClick={onToggle3DMode}
             className="relative flex items-center bg-slate-950 p-0.5 rounded-xl border border-slate-700/80 cursor-pointer select-none text-[11px] font-semibold transition"
             role="switch"
@@ -192,7 +198,7 @@ export const TopStatusBar: React.FC<TopStatusBarProps> = ({
           </div>
 
           {/* Divine Power & Dice Roll */}
-          <div className="flex items-center gap-2 bg-amber-950/40 border border-amber-600/40 px-2.5 py-1 rounded-lg text-amber-200">
+          <div data-tutorial="power-meter" className="flex items-center gap-2 bg-amber-950/40 border border-amber-600/40 px-2.5 py-1 rounded-lg text-amber-200">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
             <div className="flex flex-col text-right">
               <div className="flex items-center gap-1 font-bold font-mono text-xs leading-none">
@@ -212,6 +218,7 @@ export const TopStatusBar: React.FC<TopStatusBarProps> = ({
           {/* End Turn / Pass Action Button */}
           {activeDeity.isPlayer ? (
             <button
+              data-tutorial="end-turn"
               onClick={onEndPlayerTurn}
               className="px-3 py-1.5 rounded-xl font-bold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-md shadow-emerald-700/30 transition text-xs flex items-center gap-1"
             >
@@ -225,6 +232,7 @@ export const TopStatusBar: React.FC<TopStatusBarProps> = ({
 
           {/* Pantheon Button */}
           <button
+            data-tutorial="pantheon-button"
             onClick={onOpenPantheon}
             className="px-2.5 py-1.5 rounded-xl bg-purple-950/40 border border-purple-500/40 hover:bg-purple-900/60 text-purple-200 font-semibold transition flex items-center gap-1.5 text-xs shadow"
             title="Inspect all Deities, personalities, inter-deity rivalries and myths"
@@ -238,12 +246,30 @@ export const TopStatusBar: React.FC<TopStatusBarProps> = ({
 
           {/* Chronicle Quick Button */}
           <button
+            data-tutorial="chronicle-button"
             onClick={onOpenChronicle}
             className="p-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800 transition"
             title="Open The Great Chronicle of Bede (Historical Records)"
           >
             <BookOpen className="w-4 h-4 text-amber-400" />
           </button>
+
+          {/* Interactive Tutorial Guide Button */}
+          {onOpenTutorial && (
+            <button
+              data-tutorial="tutorial-button"
+              onClick={onOpenTutorial}
+              className={`px-2.5 py-1.5 rounded-xl border transition flex items-center gap-1.5 text-xs font-semibold shadow ${
+                isTutorialActive
+                  ? 'bg-amber-500/20 text-amber-300 border-amber-500/60 ring-2 ring-amber-400/30 animate-pulse'
+                  : 'bg-slate-900 border-slate-700 text-amber-400 hover:text-amber-200 hover:bg-slate-800'
+              }`}
+              title="Launch Interactive Divine Walkthrough & How to Play"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+              <span className="hidden lg:inline">Guide</span>
+            </button>
+          )}
         </div>
       </div>
     </header>

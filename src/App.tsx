@@ -77,6 +77,7 @@ import { ChronicleDrawer } from './components/ChronicleDrawer';
 import { PantheonDrawer } from './components/PantheonDrawer';
 import { NewGameModal } from './components/NewGameModal';
 import { SaveLoadModal } from './components/SaveLoadModal';
+import { TutorialWalkthrough, WelcomeTutorialModal } from './components/TutorialWalkthrough';
 
 export default function App() {
   // World Grid & Entities State
@@ -164,6 +165,10 @@ export default function App() {
   const [isSaveLoadModalOpen, setIsSaveLoadModalOpen] = useState(false);
   const [isPowersDrawerOpen, setIsPowersDrawerOpen] = useState(true);
   const [activeBattleResult, setActiveBattleResult] = useState<BattleResult | null>(null);
+  const [isTutorialActive, setIsTutorialActive] = useState<boolean>(false);
+  const [isWelcomeModalOpen, setIsWelcomeModalOpen] = useState<boolean>(() => {
+    return !localStorage.getItem('meglin_tutorial_completed');
+  });
 
   const playerDeity = deities.find((d) => d.isPlayer) || deities[0];
   const activeDeityId = turnOrder[activeDeityIndex] || playerDeity.id;
@@ -1178,6 +1183,7 @@ export default function App() {
     selectedNpcIds,
     customNpcs,
     customTechTree,
+    startTutorial,
   }: {
     worldStructure: WorldStructureType;
     mapSize: MapSizeType;
@@ -1187,6 +1193,7 @@ export default function App() {
     selectedNpcIds: string[];
     customNpcs?: Deity[];
     customTechTree?: Record<TechCategory, TechItem[]>;
+    startTutorial?: boolean;
   }) => {
     const newCells = generateInitialWorld(worldStructure, newMapSize, newWorldSeed);
     const newPantheon = buildCustomPantheon(newPlayerDeity, totalDeityCount, selectedNpcIds, customNpcs);
@@ -1216,6 +1223,11 @@ export default function App() {
     setYear(500);
     setSelectedCellIndices([]);
 
+    if (startTutorial) {
+      setIsTutorialActive(true);
+      localStorage.setItem('meglin_tutorial_completed', 'true');
+    }
+
     setHistory([
       {
         id: `init_${Date.now()}`,
@@ -1233,6 +1245,15 @@ export default function App() {
         category: 'creation',
       },
     ]);
+  };
+
+  const handleSelectSampleCell = () => {
+    const sampleIdx = cells.findIndex((c) => c.elevation > 0 && c.terrain !== 'ocean');
+    if (sampleIdx >= 0) {
+      setSelectedCellIndices([sampleIdx]);
+    } else if (cells.length > 0) {
+      setSelectedCellIndices([0]);
+    }
   };
 
   // Load Game Handler
@@ -1300,6 +1321,8 @@ export default function App() {
         onOpenPantheon={() => setIsPantheonOpen(true)}
         onOpenNewGame={() => setIsNewGameModalOpen(true)}
         onOpenSaveLoad={() => setIsSaveLoadModalOpen(true)}
+        onOpenTutorial={() => setIsTutorialActive(true)}
+        isTutorialActive={isTutorialActive}
       />
 
       {/* Main World Viewport: Interactive 3D Globe or 2D Tabletop Atlas */}
@@ -1460,6 +1483,40 @@ export default function App() {
         playerCivilization={civilizations.find((c) => c.creatorDeityId === playerDeity.id) || null}
         races={races}
         onResearchTech={handleResearchTech}
+      />
+
+      {/* Interactive Step-by-Step Tutorial Walkthrough */}
+      <TutorialWalkthrough
+        isActive={isTutorialActive}
+        onClose={() => {
+          setIsTutorialActive(false);
+          localStorage.setItem('meglin_tutorial_completed', 'true');
+        }}
+        is3DMode={is3DMode}
+        onToggle3DMode={() => setIs3DMode(!is3DMode)}
+        mapViewMode={mapViewMode}
+        onSelectMapViewMode={setMapViewMode}
+        isPowersDrawerOpen={isPowersDrawerOpen}
+        onTogglePowersDrawer={setIsPowersDrawerOpen}
+        onOpenRaceModal={() => setIsRaceModalOpen(true)}
+        onOpenPantheon={() => setIsPantheonOpen(true)}
+        onOpenChronicle={() => setIsChronicleOpen(true)}
+        onSelectSampleCell={handleSelectSampleCell}
+        playerPower={playerDeity.power}
+      />
+
+      {/* First-Time Divine Genesis Welcome Dialog */}
+      <WelcomeTutorialModal
+        isOpen={isWelcomeModalOpen}
+        onClose={() => {
+          setIsWelcomeModalOpen(false);
+          localStorage.setItem('meglin_tutorial_completed', 'true');
+        }}
+        onStartTutorial={() => {
+          setIsWelcomeModalOpen(false);
+          setIsTutorialActive(true);
+          localStorage.setItem('meglin_tutorial_completed', 'true');
+        }}
       />
     </div>
   );

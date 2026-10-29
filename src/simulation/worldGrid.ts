@@ -988,6 +988,14 @@ export function applyCascadingTerrainModification(
           cell.resource = cell.resource || 'Mammoth Ivory Vein';
           tundraCount++;
         } else if (ring === 1 && scope !== 'pinpoint') {
+          // Direct surrounding cells in arctic create frozen tundra
+          cell.terrain = 'tundra';
+          cell.climate = 'arctic';
+          cell.elevation = Math.max(0.18, cell.elevation);
+          cell.moisture = 0.15;
+          cell.fertility = 0.20;
+          tundraCount++;
+        } else if (ring === 2 && scope !== 'pinpoint') {
           // Followed by plains
           if (cell.elevation > 0) {
             cell.terrain = 'plains';
@@ -995,7 +1003,7 @@ export function applyCascadingTerrainModification(
             cell.fertility = 0.40;
             plainsCount++;
           }
-        } else if (ring >= 2 && scope === 'cascade') {
+        } else if (ring >= 3 && scope === 'cascade') {
           // Outer perimeter
           if (cell.elevation > 0 && cell.terrain === 'desert') {
             cell.terrain = 'plains';
@@ -1003,7 +1011,7 @@ export function applyCascadingTerrainModification(
           }
         }
       } else {
-        // Non-arctic: desert --> plains to forest in more temperate climates
+        // Non-arctic: desert (ring 0 & 1) --> plains (ring 2) to forest (ring 3) in more temperate climates
         if (ring === 0) {
           cell.terrain = 'desert';
           cell.climate = 'arid';
@@ -1013,14 +1021,23 @@ export function applyCascadingTerrainModification(
           cell.resource = cell.resource || 'Ancient Sandstone Ruins';
           desertCount++;
         } else if (ring === 1 && scope !== 'pinpoint') {
-          // desert --> plains
+          // Direct surrounding cells for arid desert create arid desert cells
+          cell.terrain = 'desert';
+          cell.climate = 'arid';
+          cell.elevation = Math.max(0.18, cell.elevation);
+          cell.moisture = 0.08;
+          cell.fertility = 0.15;
+          cell.resource = cell.resource || 'Sunken Oasis Well';
+          desertCount++;
+        } else if (ring === 2 && scope !== 'pinpoint') {
+          // Then cascade out: desert --> plains
           if (cell.elevation > 0) {
             cell.terrain = 'plains';
             cell.moisture = 0.28;
             cell.fertility = 0.50;
             plainsCount++;
           }
-        } else if (ring === 2 && scope !== 'pinpoint') {
+        } else if (ring === 3 && scope !== 'pinpoint') {
           // plains to forest in more temperate climates
           const isTemperate = cell.climate === 'temperate' || cell.climate === 'tropical' || cell.climate === 'cold' || Math.abs(cell.lat) < 58;
           if (cell.elevation > 0) {
@@ -1036,7 +1053,7 @@ export function applyCascadingTerrainModification(
               plainsCount++;
             }
           }
-        } else if (ring >= 3 && scope === 'cascade') {
+        } else if (ring >= 4 && scope === 'cascade') {
           // Outer cascade rings in temperate climates: buffer woodlands / fertile plains
           const isTemperate = cell.climate === 'temperate' || cell.climate === 'tropical' || cell.climate === 'cold';
           if (cell.elevation > 0) {
@@ -1766,6 +1783,14 @@ export function applyMultiCellCascadingTerrainModification(
           cell.resource = cell.resource || 'Mammoth Ivory Vein';
           tundraCount++;
         } else if (ring === 1 && scope !== 'pinpoint') {
+          // Direct surrounding cells in arctic create frozen tundra
+          cell.terrain = 'tundra';
+          cell.climate = 'arctic';
+          cell.elevation = Math.max(0.18, cell.elevation);
+          cell.moisture = 0.15;
+          cell.fertility = 0.20;
+          tundraCount++;
+        } else if (ring === 2 && scope !== 'pinpoint') {
           // Followed by plains
           if (cell.elevation > 0) {
             cell.terrain = 'plains';
@@ -1773,7 +1798,7 @@ export function applyMultiCellCascadingTerrainModification(
             cell.fertility = 0.40;
             plainsCount++;
           }
-        } else if (ring >= 2 && scope === 'cascade') {
+        } else if (ring >= 3 && scope === 'cascade') {
           // Outer perimeter
           if (cell.elevation > 0 && cell.terrain === 'desert') {
             cell.terrain = 'plains';
@@ -1781,7 +1806,7 @@ export function applyMultiCellCascadingTerrainModification(
           }
         }
       } else {
-        // Non-arctic: desert --> plains to forest in more temperate climates
+        // Non-arctic: desert (ring 0 & 1) --> plains (ring 2) to forest (ring 3) in more temperate climates
         if (ring === 0) {
           cell.terrain = 'desert';
           cell.climate = 'arid';
@@ -1791,14 +1816,23 @@ export function applyMultiCellCascadingTerrainModification(
           cell.resource = cell.resource || 'Ancient Sandstone Ruins';
           desertCount++;
         } else if (ring === 1 && scope !== 'pinpoint') {
-          // desert --> plains
+          // Direct surrounding cells for arid desert create arid desert cells
+          cell.terrain = 'desert';
+          cell.climate = 'arid';
+          cell.elevation = Math.max(0.18, cell.elevation);
+          cell.moisture = 0.08;
+          cell.fertility = 0.15;
+          cell.resource = cell.resource || 'Sunken Oasis Well';
+          desertCount++;
+        } else if (ring === 2 && scope !== 'pinpoint') {
+          // Then cascade out: desert --> plains
           if (cell.elevation > 0) {
             cell.terrain = 'plains';
             cell.moisture = 0.28;
             cell.fertility = 0.50;
             plainsCount++;
           }
-        } else if (ring === 2 && scope !== 'pinpoint') {
+        } else if (ring === 3 && scope !== 'pinpoint') {
           // plains to forest in more temperate climates
           const isTemperate = cell.climate === 'temperate' || cell.climate === 'tropical' || cell.climate === 'cold' || Math.abs(cell.lat) < 58;
           if (cell.elevation > 0) {
@@ -1814,7 +1848,7 @@ export function applyMultiCellCascadingTerrainModification(
               plainsCount++;
             }
           }
-        } else if (ring >= 3 && scope === 'cascade') {
+        } else if (ring >= 4 && scope === 'cascade') {
           // Outer cascade rings in temperate climates: buffer woodlands / fertile plains
           const isTemperate = cell.climate === 'temperate' || cell.climate === 'tropical' || cell.climate === 'cold';
           if (cell.elevation > 0) {

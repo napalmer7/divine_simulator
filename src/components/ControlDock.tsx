@@ -144,7 +144,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
 
       {/* 2. EXPANDED STATE: Sleek Pullout Drawer that sits alongside the map, pushing the map left without overlapping */}
       {isOpen && (
-        <div className="relative z-20 w-[420px] sm:w-[460px] md:w-[480px] lg:w-[500px] max-w-[50vw] sm:max-w-none h-full flex-shrink-0 bg-slate-950/95 border-l border-amber-500/40 shadow-2xl backdrop-blur-md flex flex-col text-slate-100 overflow-hidden">
+        <div data-tutorial="powers-drawer" className="relative z-20 w-[420px] sm:w-[460px] md:w-[480px] lg:w-[500px] max-w-[50vw] sm:max-w-none h-full flex-shrink-0 bg-slate-950/95 border-l border-amber-500/40 shadow-2xl backdrop-blur-md flex flex-col text-slate-100 overflow-hidden">
           {/* Drawer Header */}
           <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-slate-900/90 flex-shrink-0">
             <div className="flex items-center gap-3">
@@ -625,6 +625,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
               <div className="space-y-3">
                 {/* Highlighted Synthesizer Launch Banner */}
                 <button
+                  data-tutorial="race-button"
                   onClick={onOpenRaceSynthesizer}
                   disabled={playerPower < costs.create_race[currentAge]}
                   className="w-full p-4 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 disabled:opacity-40 text-white font-bold flex items-center justify-between transition shadow-lg shadow-emerald-950/50"

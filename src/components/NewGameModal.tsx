@@ -58,6 +58,7 @@ interface NewGameModalProps {
     selectedNpcIds: string[];
     customNpcs?: Deity[];
     customTechTree?: Record<TechCategory, TechItem[]>;
+    startTutorial?: boolean;
   }) => void;
 }
 
@@ -82,6 +83,9 @@ export const NewGameModal: React.FC<NewGameModalProps> = ({
   const [mapSize, setMapSize] = useState<MapSizeType>('medium');
   const [worldSeed, setWorldSeed] = useState<string>(() => generateRandomSeed());
   const [randomizeOnStart, setRandomizeOnStart] = useState<boolean>(true);
+  const [launchTutorial, setLaunchTutorial] = useState<boolean>(() => {
+    return !localStorage.getItem('meglin_tutorial_completed');
+  });
 
   // Player Deity State
   const [name, setName] = useState('Aethelgard');
@@ -297,6 +301,7 @@ export const NewGameModal: React.FC<NewGameModalProps> = ({
       selectedNpcIds,
       customNpcs,
       customTechTree: techTreeData,
+      startTutorial: launchTutorial,
     });
     onClose();
   };
@@ -1215,19 +1220,32 @@ export const NewGameModal: React.FC<NewGameModalProps> = ({
         </div>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-800 bg-slate-950/80">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition text-xs font-semibold"
-          >
-            Cancel
-          </button>
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-slate-800 bg-slate-950/80">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition text-xs font-semibold"
+            >
+              Cancel
+            </button>
+            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={launchTutorial}
+                onChange={(e) => setLaunchTutorial(e.target.checked)}
+                className="w-4 h-4 rounded text-amber-500 accent-amber-500 cursor-pointer"
+              />
+              <span className="text-[11px] text-amber-300 font-medium">
+                Launch interactive Divine Walkthrough
+              </span>
+            </label>
+          </div>
           <button
             type="button"
             onClick={handleStart}
             disabled={selectedNpcIds.length === 0}
-            className="px-6 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-slate-950 font-bold flex items-center gap-2 shadow-lg shadow-amber-600/20 transition text-xs disabled:opacity-40"
+            className="w-full sm:w-auto px-6 py-2 rounded-xl bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 text-slate-950 font-bold flex items-center justify-center gap-2 shadow-lg shadow-amber-600/20 transition text-xs disabled:opacity-40"
           >
             <Sparkles className="w-4 h-4" />
             Begin Cosmic Genesis ({1 + selectedNpcIds.length} Deities)
