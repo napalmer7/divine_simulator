@@ -658,3 +658,104 @@ export function generateMythAndLore(params: {
   // Standard civilized fantasy myth
   return `Born under the auspicious stars above ${trope.locus}, the ${raceName} arose as the first civilization of the region.${resourcePhrase}Their immortal creator ${trope.deityGift}, guiding them through the great trial of ${trope.trial} to lay the foundation stones of their eternal heritage.`;
 }
+
+/**
+ * Procedurally generate an evocative civilization/realm name for a race.
+ */
+export function generateCivilizationName(params: {
+  raceName: string;
+  demonym?: string;
+  category?: RaceCategory;
+  societal?: SocietalBehavior;
+  biome?: TerrainType;
+}): string {
+  const { raceName, demonym, category = 'civilized', biome } = params;
+  const cleanRace = raceName.replace(/\s*\(.*?\)\s*/g, '').trim() || 'Mortal';
+  const effectiveDemonym = demonym?.trim() || cleanRace;
+
+  // Societal and category title structures
+  if (category === 'monstrous') {
+    const titles = [
+      `Iron Horde of ${cleanRace}`,
+      `The Crimson Warband of ${cleanRace}`,
+      `Bloodfang Dominion of the ${effectiveDemonym}`,
+      `The Ravager Host of ${cleanRace}`,
+      `Dread Hegemony of ${cleanRace}`,
+      `The Black Banner of ${cleanRace}`,
+      `Gore-Peak Dominion`,
+      `Savage Khanate of ${cleanRace}`,
+    ];
+    return titles[Math.floor(Math.random() * titles.length)];
+  }
+
+  if (category === 'aberration') {
+    const titles = [
+      `The Obsidian Conclave of ${cleanRace}`,
+      `Nexus of the ${cleanRace}`,
+      `The Void Collective of ${effectiveDemonym}`,
+      `The Chittering Hive Sovereign`,
+      `Stygian Dominion of ${cleanRace}`,
+      `The Netherward Synod`,
+      `Abyssal Swarm of ${cleanRace}`,
+    ];
+    return titles[Math.floor(Math.random() * titles.length)];
+  }
+
+  // Biome-specific flavor titles
+  const biomeTitles: Partial<Record<TerrainType, string[]>> = {
+    desert: [
+      `Sun-Drenched Sultanate of ${cleanRace}`,
+      `The Golden Oasis League of ${cleanRace}`,
+      `Dune-Empire of ${effectiveDemonym}`,
+    ],
+    mountains: [
+      `High Thane-Hold of ${cleanRace}`,
+      `Granite Peaks Tsardom of ${cleanRace}`,
+      `Iron Fortress Realm of ${effectiveDemonym}`,
+    ],
+    forest: [
+      `The Sylvan Court of ${cleanRace}`,
+      `Verdant Archduchy of ${cleanRace}`,
+      `Emerald Canopy Concordat`,
+    ],
+    tundra: [
+      `The Frost-Moot of ${cleanRace}`,
+      `Glacial Crown Realm of ${cleanRace}`,
+      `Boreal Sovereignty of ${effectiveDemonym}`,
+    ],
+    volcanic: [
+      `Cinder-Throne Imperium of ${cleanRace}`,
+      `Obsidian Caldera Hegemony`,
+    ],
+    swamp: [
+      `Mist-Fen Barony of ${cleanRace}`,
+      `Sunken Bayou Commonwealth of ${cleanRace}`,
+    ],
+    hills: [
+      `Barrow-Downs March of ${cleanRace}`,
+      `Highland Shire Confederacy of ${cleanRace}`,
+    ],
+    plains: [
+      `Grand Realm of the ${effectiveDemonym}`,
+      `Golden Steppe Confederation`,
+    ],
+  };
+
+  const pool = (biome && biomeTitles[biome]) || [];
+  const genericTitles = [
+    `Grand Realm of the ${effectiveDemonym}`,
+    `High Kingdom of ${cleanRace}`,
+    `Sovereign Principality of ${cleanRace}`,
+    `The Concordat of ${cleanRace}`,
+    `The Golden League of ${effectiveDemonym}`,
+    `Commonwealth of ${cleanRace}`,
+    `The Crown Dominion of ${cleanRace}`,
+    `Sacred Hegemony of the ${effectiveDemonym}`,
+    `United Realms of ${cleanRace}`,
+    `Imperial Dynasty of ${cleanRace}`,
+  ];
+
+  const fullPool = [...pool, ...genericTitles];
+  return fullPool[Math.floor(Math.random() * fullPool.length)];
+}
+

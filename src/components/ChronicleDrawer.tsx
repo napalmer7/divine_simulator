@@ -5,7 +5,7 @@
 
 import React, { useState } from 'react';
 import { HistoryLogEntry } from '../types/game';
-import { generateMythicChronicle } from '../services/geminiStoryteller';
+import { generateMythicChronicle, generateMythicChronicleStream } from '../services/geminiStoryteller';
 import { BookOpen, X, Download, Copy, Sparkles, Filter, Check } from 'lucide-react';
 
 interface ChronicleDrawerProps {
@@ -33,10 +33,13 @@ export const ChronicleDrawer: React.FC<ChronicleDrawerProps> = ({
 
   const handleGenerateSaga = async () => {
     setIsGeneratingSaga(true);
-    const text = await generateMythicChronicle(history);
+    setActiveTab('saga');
+    setSagaText('');
+    const text = await generateMythicChronicleStream(history, (chunk) => {
+      setSagaText((prev) => (prev ? prev + chunk : chunk));
+    });
     setSagaText(text);
     setIsGeneratingSaga(false);
-    setActiveTab('saga');
   };
 
   const handleCopyHistory = () => {

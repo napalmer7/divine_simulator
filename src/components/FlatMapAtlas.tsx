@@ -831,6 +831,9 @@ export const FlatMapAtlas: React.FC<FlatMapAtlasProps> = ({
         <div className="flex flex-wrap items-center justify-between gap-3 pt-1 text-[11px] text-amber-200/80 border-t border-amber-900/40">
           <div className="flex flex-wrap gap-3">
             <div className="flex items-center gap-1.5">
+              <span className="w-2.5 h-2.5 rounded bg-[#38bdf8] inline-block border border-slate-700"></span> Lake / Shallows
+            </div>
+            <div className="flex items-center gap-1.5">
               <span className="w-2.5 h-2.5 rounded bg-[#0369a1] inline-block border border-slate-700"></span> Ocean
             </div>
             <div className="flex items-center gap-1.5">

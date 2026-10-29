@@ -19,6 +19,7 @@ import {
   PRESET_RACES,
   generateSpeciesName,
   generateMythAndLore,
+  generateCivilizationName,
 } from '../simulation/races';
 import {
   X,
@@ -35,6 +36,10 @@ import {
   Bug,
   Flame,
   Check,
+  Landmark,
+  Globe,
+  SlidersHorizontal,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface RaceGeneratorModalProps {
@@ -44,7 +49,7 @@ interface RaceGeneratorModalProps {
   playerPower: number;
   existingRaces: Race[];
   targetCell?: WorldCell | null;
-  onCreateRace: (race: Race, isSubrace: boolean) => void;
+  onCreateRace: (race: Race, isSubrace: boolean, customCivName?: string) => void;
 }
 
 export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
@@ -56,7 +61,7 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
   targetCell,
   onCreateRace,
 }) => {
-  const [activeTab, setActiveTab] = useState<'synthesizer' | 'presets'>('synthesizer');
+  const [activeTab, setActiveTab] = useState<'synthesizer' | 'presets' | 'currentRaces'>('synthesizer');
   const [category, setCategory] = useState<RaceCategory>('civilized');
   const [isSubrace, setIsSubrace] = useState(false);
   const [parentRaceId, setParentRaceId] = useState<string>(existingRaces[0]?.id || '');
@@ -64,6 +69,14 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
   // Synthesizer State
   const [name, setName] = useState('Humans');
   const [demonym, setDemonym] = useState('Humanity');
+  const [civName, setCivName] = useState(() =>
+    generateCivilizationName({
+      raceName: 'Humans',
+      demonym: 'Humanity',
+      category: 'civilized',
+      biome: targetCell?.terrain,
+    })
+  );
   const [description, setDescription] = useState(
     'Highly adaptable, ambitious, and prolific mortals known for establishing vast kingdoms and rapid technological innovation.'
   );
@@ -77,6 +90,10 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
   const [favoredBiomes, setFavoredBiomes] = useState<TerrainType[]>(['plains', 'hills']);
   const [color, setColor] = useState('#60a5fa');
   const [baseAlignment, setBaseAlignment] = useState<number>(0);
+
+  // Preset Customization State (custom lore & civ names for archetypes)
+  const [presetCustomLore, setPresetCustomLore] = useState<Record<string, string>>({});
+  const [presetCivNames, setPresetCivNames] = useState<Record<string, string>>({});
 
   // Sync parent race selection when toggling subrace
   const applyParentRaceDetails = useCallback(
@@ -119,6 +136,17 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
         societal: parent.societalBehavior,
       });
       setDescription(myth);
+
+      // Pre-fill realm name for subrace
+      setCivName(
+        generateCivilizationName({
+          raceName: gen.name,
+          demonym: gen.demonym,
+          category: parent.category || 'civilized',
+          societal: parent.societalBehavior,
+          biome: targetBiome,
+        })
+      );
     },
     [existingRaces, targetCell]
   );
@@ -139,6 +167,15 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
       });
       setName(gen.name);
       setDemonym(gen.demonym);
+      setCivName(
+        generateCivilizationName({
+          raceName: gen.name,
+          demonym: gen.demonym,
+          category,
+          societal,
+          biome: targetCell?.terrain || 'plains',
+        })
+      );
     }
   };
 
@@ -150,7 +187,7 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
     }
   };
 
-  // Roll New Name
+  // Roll New Species Name & Demonym & Realm Name
   const handleRollName = () => {
     const parent = existingRaces.find((r) => r.id === parentRaceId);
     const gen = generateSpeciesName({
@@ -161,11 +198,31 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
     });
     setName(gen.name);
     setDemonym(gen.demonym);
+    setCivName(
+      generateCivilizationName({
+        raceName: gen.name,
+        demonym: gen.demonym,
+        category,
+        societal,
+        biome: targetCell?.terrain || favoredBiomes[0] || 'plains',
+      })
+    );
   };
 
-  // Generate Myth and Lore
+  // Roll New Civilization / Realm Name
+  const handleRollCivName = () => {
+    const newName = generateCivilizationName({
+      raceName: name.trim() || 'Mortal Kind',
+      demonym: demonym.trim() || name.trim(),
+      category,
+      societal,
+      biome: targetCell?.terrain || favoredBiomes[0] || 'plains',
+    });
+    setCivName(newName);
+  };
+
+  // Generate Myth and Lore in Synthesizer
   const handleGenerateMythAndLore = () => {
-    // If targetCell is available, ensure its biome is in favoredBiomes
     if (targetCell?.terrain && !favoredBiomes.includes(targetCell.terrain)) {
       setFavoredBiomes((prev) => [...prev, targetCell.terrain]);
     }
@@ -188,25 +245,33 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
   // Handle Category Change (Civilized vs Monstrous vs Aberration)
   const handleChangeCategory = (newCat: RaceCategory) => {
     setCategory(newCat);
+    let newCarapace = 'Normal Humanoid Skin (Standard Epidermis)';
+    let newSocietal: SocietalBehavior = 'feudal_monarchy';
+    let newIntelligence: IntelligenceLevel = 'scholastic';
+
     if (newCat === 'monstrous') {
       setBaseAlignment(-1);
       setColor('#ef4444');
-      setCarapace('Thick Scaled Reptilian Plates');
-      setSocietal('militaristic');
-      setIntelligence('cunning');
+      newCarapace = 'Thick Scaled Reptilian Plates';
+      newSocietal = 'militaristic';
+      newIntelligence = 'cunning';
     } else if (newCat === 'aberration') {
       setBaseAlignment(-1);
       setColor('#a855f7');
-      setCarapace('Chitinous Exoskeleton / Carapace');
-      setSocietal('hive_collective');
-      setIntelligence('arcane_network');
+      newCarapace = 'Chitinous Exoskeleton / Carapace';
+      newSocietal = 'hive_collective';
+      newIntelligence = 'arcane_network';
     } else {
       setBaseAlignment(0);
       setColor('#60a5fa');
-      setCarapace('Normal Humanoid Skin (Standard Epidermis)');
-      setSocietal('feudal_monarchy');
-      setIntelligence('scholastic');
+      newCarapace = 'Normal Humanoid Skin (Standard Epidermis)';
+      newSocietal = 'feudal_monarchy';
+      newIntelligence = 'scholastic';
     }
+
+    setCarapace(newCarapace);
+    setSocietal(newSocietal);
+    setIntelligence(newIntelligence);
 
     if (!isSubrace) {
       const gen = generateSpeciesName({
@@ -216,7 +281,87 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
       });
       setName(gen.name);
       setDemonym(gen.demonym);
+      setCivName(
+        generateCivilizationName({
+          raceName: gen.name,
+          demonym: gen.demonym,
+          category: newCat,
+          societal: newSocietal,
+          biome: targetCell?.terrain || 'plains',
+        })
+      );
     }
+  };
+
+  // Helper for preset lore
+  const getPresetLore = (preset: Race) => {
+    return presetCustomLore[preset.id] ?? preset.description;
+  };
+
+  // Helper for preset civ name
+  const getPresetCivName = (preset: Race) => {
+    return (
+      presetCivNames[preset.id] ??
+      generateCivilizationName({
+        raceName: preset.name,
+        demonym: preset.demonym,
+        category: preset.category,
+        societal: preset.societalBehavior,
+        biome: targetCell?.terrain,
+      })
+    );
+  };
+
+  // Adapt preset myth from cradle location
+  const handleAdaptPresetMyth = (preset: Race) => {
+    const adapted = generateMythAndLore({
+      raceName: preset.name,
+      category: preset.category,
+      isSubrace: false,
+      targetCell,
+      carapace: preset.physiology.carapaceOrSkin,
+      societal: preset.societalBehavior,
+    });
+    setPresetCustomLore((prev) => ({ ...prev, [preset.id]: adapted }));
+  };
+
+  // Roll preset civ name
+  const handleRollPresetCivName = (preset: Race) => {
+    const rolled = generateCivilizationName({
+      raceName: preset.name,
+      demonym: preset.demonym,
+      category: preset.category,
+      societal: preset.societalBehavior,
+      biome: targetCell?.terrain,
+    });
+    setPresetCivNames((prev) => ({ ...prev, [preset.id]: rolled }));
+  };
+
+  // Load a preset directly into the synthesizer for in-depth editing
+  const handleLoadPresetIntoSynthesizer = (preset: Race) => {
+    setName(preset.name);
+    setDemonym(preset.demonym);
+    setDescription(getPresetLore(preset));
+    setCivName(getPresetCivName(preset));
+    setCarapace(preset.physiology.carapaceOrSkin);
+    setLocomotion(preset.physiology.locomotion);
+    setSensory(preset.physiology.sensory);
+    setIntelligence(preset.intelligenceLevel);
+    setSocietal(preset.societalBehavior);
+    setFavoredBiomes([...preset.favoredBiomes]);
+    setColor(preset.color || '#60a5fa');
+    setBaseAlignment(preset.baseAlignment);
+    setCategory(preset.category || 'civilized');
+    setIsSubrace(false);
+    setActiveTab('synthesizer');
+  };
+
+  // Mutate subrace directly from an existing race card
+  const handleMutateFromExisting = (race: Race) => {
+    setIsSubrace(true);
+    setParentRaceId(race.id);
+    applyParentRaceDetails(race.id);
+    setActiveTab('synthesizer');
   };
 
   if (!isOpen) return null;
@@ -227,7 +372,7 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
 
   const canAfford = playerPower >= cost;
 
-  // Calculate dynamic stats
+  // Calculate dynamic stats for synthesizer
   let militaryBonus = 1;
   let fertilityMultiplier = 1.0;
   let techAffinity = 1.0;
@@ -284,7 +429,6 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
     if (!canAfford) return;
 
     let finalName = name.trim() || 'Primordial Kind';
-    // Ensure subrace strictly adheres to parent in parentheses format
     if (isSubrace && parentRaceId) {
       const parent = existingRaces.find((r) => r.id === parentRaceId);
       if (parent) {
@@ -333,19 +477,24 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
       color,
     };
 
-    onCreateRace(newRace, isSubrace);
+    onCreateRace(newRace, isSubrace, civName.trim() || undefined);
     onClose();
   };
 
   const handleSelectPreset = (preset: Race) => {
     if (!canAfford) return;
+    const chosenLore = getPresetLore(preset);
+    const chosenCivName = getPresetCivName(preset);
+
     const raceCopy: Race = {
       ...preset,
       id: `race_preset_${Date.now()}`,
       creatorDeityId: 'deity_player',
       parentRaceId: null,
+      description: chosenLore,
     };
-    onCreateRace(raceCopy, false);
+
+    onCreateRace(raceCopy, false, chosenCivName);
     onClose();
   };
 
@@ -393,11 +542,11 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
         </div>
 
         {/* Tab Controls */}
-        <div className="flex border-b border-slate-800 px-6 bg-slate-900/60 justify-between items-center">
-          <div className="flex">
+        <div className="flex border-b border-slate-800 px-6 bg-slate-900/60 justify-between items-center overflow-x-auto">
+          <div className="flex shrink-0">
             <button
               onClick={() => setActiveTab('synthesizer')}
-              className={`py-3 px-4 text-xs font-semibold uppercase tracking-wider border-b-2 transition flex items-center gap-1.5 ${
+              className={`py-3 px-4 text-xs font-semibold uppercase tracking-wider border-b-2 transition flex items-center gap-1.5 whitespace-nowrap ${
                 activeTab === 'synthesizer'
                   ? 'border-indigo-500 text-indigo-300'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
@@ -407,18 +556,28 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
             </button>
             <button
               onClick={() => setActiveTab('presets')}
-              className={`py-3 px-4 text-xs font-semibold uppercase tracking-wider border-b-2 transition flex items-center gap-1.5 ${
+              className={`py-3 px-4 text-xs font-semibold uppercase tracking-wider border-b-2 transition flex items-center gap-1.5 whitespace-nowrap ${
                 activeTab === 'presets'
                   ? 'border-indigo-500 text-indigo-300'
                   : 'border-transparent text-slate-400 hover:text-slate-200'
               }`}
             >
-              <Sparkles className="w-3.5 h-3.5" /> Fantasy & Monster Archetypes
+              <Sparkles className="w-3.5 h-3.5" /> Fantasy Archetypes
+            </button>
+            <button
+              onClick={() => setActiveTab('currentRaces')}
+              className={`py-3 px-4 text-xs font-semibold uppercase tracking-wider border-b-2 transition flex items-center gap-1.5 whitespace-nowrap ${
+                activeTab === 'currentRaces'
+                  ? 'border-indigo-500 text-indigo-300'
+                  : 'border-transparent text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" /> Current Races ({existingRaces.length})
             </button>
           </div>
 
           {activeTab === 'synthesizer' && (
-            <div className="hidden sm:flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800">
+            <div className="hidden sm:flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 shrink-0">
               <button
                 onClick={() => handleChangeCategory('civilized')}
                 className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 transition ${
@@ -455,65 +614,270 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
 
         {/* Modal Body */}
         <div className="p-6 overflow-y-auto space-y-5 flex-1 text-xs">
-          {activeTab === 'presets' ? (
+          {activeTab === 'currentRaces' ? (
+            /* Tab 3: Current World Races */
             <div className="space-y-4">
-              <div className="flex items-center justify-between pb-1 border-b border-slate-800 text-slate-400">
-                <span>Select a classic species archetype to awaken on the world:</span>
-                <span className="text-[11px] text-amber-400">Creation Cost: {cost} Power</span>
+              <div className="flex items-center justify-between pb-2 border-b border-slate-800 text-slate-400">
+                <span className="flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-indigo-400" />
+                  Sentient species currently populating the world:
+                </span>
+                <span className="text-[11px] text-amber-400">
+                  Total Active Lineages: {existingRaces.length}
+                </span>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                {PRESET_RACES.map((preset) => (
-                  <div
-                    key={preset.id}
-                    className="p-3.5 rounded-xl border border-slate-700/80 bg-slate-800/40 hover:border-indigo-500/60 hover:bg-slate-800/80 transition flex flex-col justify-between"
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-white" style={{ color: preset.color }}>
-                            {preset.name}
-                          </span>
-                          {preset.category === 'monstrous' && (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-950 text-red-300 border border-red-800/60 flex items-center gap-0.5">
-                              <Skull className="w-2.5 h-2.5" /> Monster
-                            </span>
-                          )}
-                          {preset.category === 'aberration' && (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-950 text-purple-300 border border-purple-800/60 flex items-center gap-0.5">
-                              <Bug className="w-2.5 h-2.5" /> Aberration
-                            </span>
-                          )}
-                        </div>
-                        <span className="px-2 py-0.5 rounded text-[10px] bg-slate-700 text-slate-300">
-                          {preset.societalBehavior.replace('_', ' ')}
-                        </span>
-                      </div>
-                      <p className="text-slate-400 text-xs mb-2.5 leading-relaxed">
-                        {preset.description}
-                      </p>
-                      <div className="flex flex-wrap gap-1.5 mb-2.5">
-                        {preset.traits.map((t) => (
-                          <span
-                            key={t}
-                            className="px-2 py-0.5 rounded-full bg-slate-700/60 text-slate-300 text-[10px]"
-                          >
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
+
+              {existingRaces.length === 0 ? (
+                <div className="py-12 flex flex-col items-center justify-center text-center p-6 rounded-2xl bg-slate-950/60 border border-slate-800/80">
+                  <div className="p-4 rounded-full bg-slate-800/80 text-slate-400 mb-3 border border-slate-700">
+                    <Users className="w-8 h-8 opacity-70" />
+                  </div>
+                  <h3 className="text-sm font-bold text-white mb-1">The World is Bereft of Mortals</h3>
+                  <p className="text-slate-400 max-w-md text-xs mb-4 leading-relaxed">
+                    No sentient races have been awakened yet. Use the <strong>Genetic Synthesizer</strong> to craft a bespoke race, or choose from classic <strong>Fantasy Archetypes</strong> to seed your first civilization!
+                  </p>
+                  <div className="flex gap-2.5">
                     <button
-                      disabled={!canAfford}
-                      onClick={() => handleSelectPreset(preset)}
-                      className="w-full mt-1 py-1.5 rounded-lg font-semibold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white transition flex items-center justify-center gap-1.5 text-xs"
+                      onClick={() => setActiveTab('synthesizer')}
+                      className="px-3.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold flex items-center gap-1.5 transition"
                     >
-                      <Sparkles className="w-3.5 h-3.5" /> Awaken {preset.name} ({cost} Pts)
+                      <Dna className="w-3.5 h-3.5" /> Open Synthesizer
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('presets')}
+                      className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold flex items-center gap-1.5 transition border border-slate-700"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" /> Browse Archetypes
                     </button>
                   </div>
-                ))}
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                  {existingRaces.map((r) => {
+                    const isMonstrous = r.category === 'monstrous';
+                    const isAberration = r.category === 'aberration';
+                    const isSub = !!r.parentRaceId;
+
+                    return (
+                      <div
+                        key={r.id}
+                        className="p-3.5 rounded-xl border border-slate-800 bg-slate-950/70 hover:border-slate-700 transition flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="w-3 h-3 rounded-full shrink-0 shadow-sm"
+                                style={{ backgroundColor: r.color || '#60a5fa' }}
+                              />
+                              <span className="font-bold text-sm text-white">{r.name}</span>
+                              {isSub && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-950/80 text-amber-300 border border-amber-800/60">
+                                  Subrace
+                                </span>
+                              )}
+                              {isMonstrous && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-950/80 text-red-300 border border-red-800/60 flex items-center gap-0.5">
+                                  <Skull className="w-2.5 h-2.5" /> Monster
+                                </span>
+                              )}
+                              {isAberration && (
+                                <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-950/80 text-purple-300 border border-purple-800/60 flex items-center gap-0.5">
+                                  <Bug className="w-2.5 h-2.5" /> Aberration
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-full border border-slate-700">
+                              {r.demonym}
+                            </span>
+                          </div>
+
+                          <p className="text-slate-400 text-xs mb-3 leading-relaxed line-clamp-3">
+                            {r.description}
+                          </p>
+
+                          <div className="flex flex-wrap gap-1.5 mb-3">
+                            <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[10px] border border-slate-700/60">
+                              Cognition: {r.intelligenceLevel.replace('_', ' ')}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[10px] border border-slate-700/60">
+                              Society: {r.societalBehavior.replace('_', ' ')}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[10px] border border-slate-700/60">
+                              Military: +{r.militaryBonus}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 text-[10px] border border-slate-700/60">
+                              Fertility: {r.fertilityMultiplier.toFixed(2)}x
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between gap-2">
+                          <span className="text-[10px] text-slate-500">
+                            Habitats: {r.favoredBiomes.join(', ')}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleMutateFromExisting(r)}
+                            className="px-2.5 py-1 rounded-lg bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-300 border border-indigo-500/40 text-[11px] font-semibold flex items-center gap-1 transition"
+                            title="Branch a specialized subrace from this species in the synthesizer"
+                          >
+                            <Dna className="w-3 h-3" /> Mutate Subrace
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : activeTab === 'presets' ? (
+            /* Tab 2: Fantasy & Monster Archetypes */
+            <div className="space-y-4">
+              <div className="flex items-center justify-between pb-1 border-b border-slate-800 text-slate-400">
+                <span>Select a classic archetype. Lore is pre-filled, or can be adapted directly to the cradle:</span>
+                <span className="text-[11px] text-amber-400">Creation Cost: {cost} Power</span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {PRESET_RACES.map((preset) => {
+                  const existingMatch = existingRaces.find(
+                    (r) =>
+                      r.name.toLowerCase() === preset.name.toLowerCase() ||
+                      r.name.toLowerCase().startsWith(preset.name.toLowerCase())
+                  );
+                  const isAlreadyCreated = !!existingMatch;
+                  const currentLore = getPresetLore(preset);
+                  const currentCivName = getPresetCivName(preset);
+
+                  return (
+                    <div
+                      key={preset.id}
+                      className={`p-4 rounded-xl border transition flex flex-col justify-between ${
+                        isAlreadyCreated
+                          ? 'border-emerald-600/60 bg-emerald-950/20 ring-1 ring-emerald-500/30'
+                          : 'border-slate-700/80 bg-slate-800/40 hover:border-indigo-500/60 hover:bg-slate-800/70'
+                      }`}
+                    >
+                      <div>
+                        {/* Header & Badges */}
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-sm text-white" style={{ color: preset.color }}>
+                              {preset.name}
+                            </span>
+                            {preset.category === 'monstrous' && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-950 text-red-300 border border-red-800/60 flex items-center gap-0.5">
+                                <Skull className="w-2.5 h-2.5" /> Monster
+                              </span>
+                            )}
+                            {preset.category === 'aberration' && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-950 text-purple-300 border border-purple-800/60 flex items-center gap-0.5">
+                                <Bug className="w-2.5 h-2.5" /> Aberration
+                              </span>
+                            )}
+                            {isAlreadyCreated && (
+                              <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-900/80 text-emerald-300 border border-emerald-600/70 flex items-center gap-1">
+                                <CheckCircle2 className="w-2.5 h-2.5 text-emerald-400" /> Awakened
+                              </span>
+                            )}
+                          </div>
+                          <span className="px-2 py-0.5 rounded text-[10px] bg-slate-700 text-slate-300">
+                            {preset.societalBehavior.replace('_', ' ')}
+                          </span>
+                        </div>
+
+                        {/* Initial Realm / Civilization Name Field */}
+                        <div className="mb-2.5 bg-slate-900/80 p-2.5 rounded-lg border border-slate-700/80">
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-slate-300 font-semibold text-[11px] flex items-center gap-1">
+                              <Landmark className="w-3 h-3 text-amber-400" /> Realm / Civilization Name
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => handleRollPresetCivName(preset)}
+                              className="text-[10px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 font-semibold"
+                              title="Roll a procedural realm name"
+                            >
+                              <Dice5 className="w-3 h-3" /> Roll Realm
+                            </button>
+                          </div>
+                          <input
+                            type="text"
+                            value={currentCivName}
+                            onChange={(e) =>
+                              setPresetCivNames((prev) => ({ ...prev, [preset.id]: e.target.value }))
+                            }
+                            className="w-full px-2.5 py-1.5 rounded bg-slate-800 border border-slate-700 text-white focus:border-indigo-500 outline-none text-xs font-medium"
+                            placeholder="e.g. High Kingdom of Elves"
+                          />
+                        </div>
+
+                        {/* Myth & Lore with Adapt Button */}
+                        <div className="mb-2.5">
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-slate-300 font-semibold text-[11px] flex items-center gap-1">
+                              <Scroll className="w-3 h-3 text-amber-400" /> Myth & Cultural Lore
+                            </label>
+                            <button
+                              type="button"
+                              onClick={() => handleAdaptPresetMyth(preset)}
+                              className="text-[10px] text-amber-300 hover:text-amber-200 flex items-center gap-1 px-1.5 py-0.5 rounded bg-indigo-950/60 border border-indigo-700/50 transition font-medium"
+                              title="Adapt canon lore to current cradle coordinates, biome, and terrain"
+                            >
+                              <Sparkles className="w-2.5 h-2.5 text-amber-400" /> Adapt to Cradle
+                            </button>
+                          </div>
+                          <textarea
+                            rows={3}
+                            value={currentLore}
+                            onChange={(e) =>
+                              setPresetCustomLore((prev) => ({ ...prev, [preset.id]: e.target.value }))
+                            }
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-300 focus:border-indigo-500 outline-none resize-none leading-relaxed text-[11px]"
+                            placeholder="Origin myth and cultural lore..."
+                          />
+                        </div>
+
+                        {/* Traits Badges */}
+                        <div className="flex flex-wrap gap-1.5 mb-3">
+                          {preset.traits.map((t) => (
+                            <span
+                              key={t}
+                              className="px-2 py-0.5 rounded-full bg-slate-700/60 text-slate-300 text-[10px]"
+                            >
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2 pt-2 border-t border-slate-700/60">
+                        <button
+                          type="button"
+                          onClick={() => handleLoadPresetIntoSynthesizer(preset)}
+                          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1 border border-slate-700 transition"
+                          title="Open this archetype inside the genetic synthesizer to tweak physical and societal traits"
+                        >
+                          <SlidersHorizontal className="w-3.5 h-3.5" /> Synthesize
+                        </button>
+                        <button
+                          disabled={!canAfford}
+                          onClick={() => handleSelectPreset(preset)}
+                          className="flex-1 py-1.5 rounded-lg font-semibold bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white transition flex items-center justify-center gap-1.5 text-xs shadow-md shadow-indigo-600/20"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" />
+                          Awaken {preset.name} ({cost} Pts)
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ) : (
+            /* Tab 1: Genetic Synthesizer */
             <div className="space-y-4">
               {/* Subrace & Classification Bar */}
               <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800 flex flex-wrap items-center justify-between gap-3">
@@ -572,7 +936,7 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
                       className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1"
                       title="Roll an evocative fantasy or monstrous species name"
                     >
-                      <Dice5 className="w-3.5 h-3.5" /> Roll Name
+                      <Dice5 className="w-3.5 h-3.5" /> Roll Species Name
                     </button>
                   </div>
                   <input
@@ -595,6 +959,33 @@ export const RaceGeneratorModal: React.FC<RaceGeneratorModalProps> = ({
                     placeholder="e.g. The Celestial Vanguard"
                   />
                 </div>
+              </div>
+
+              {/* Realm / Initial Civilization Name Field with Random Generator */}
+              <div className="p-3 rounded-xl bg-slate-950/70 border border-slate-800">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-slate-200 font-semibold flex items-center gap-1.5">
+                    <Landmark className="w-4 h-4 text-amber-400" /> Initial Realm / Civilization Name
+                  </label>
+                  <button
+                    type="button"
+                    onClick={handleRollCivName}
+                    className="text-[11px] text-amber-300 hover:text-amber-200 flex items-center gap-1 font-semibold px-2 py-0.5 rounded bg-amber-950/60 border border-amber-700/50 transition"
+                    title="Generate a randomized thematic civilization name based on race, traits, and cradle"
+                  >
+                    <Dice5 className="w-3.5 h-3.5" /> Roll Realm Name
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  value={civName}
+                  onChange={(e) => setCivName(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-800 border border-slate-700 text-white focus:border-indigo-500 outline-none font-medium text-xs"
+                  placeholder="e.g. Grand Realm of the High Elves, Iron Horde of the Orcs..."
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  This realm will be established in the cradle settlement along with a unique heraldic coat of arms.
+                </p>
               </div>
 
               {/* Myth & Lore with Location-Based Generator Button */}

@@ -517,6 +517,8 @@ export interface CascadeSummary {
   swampCount: number;
   shallowsCount: number;
   oceanCount: number;
+  desertCount?: number;
+  tundraCount?: number;
   totalAffected: number;
   logNarrative: string;
 }
@@ -537,6 +539,15 @@ export function applyCascadingTerrainModification(
   const maxDist = scope === 'pinpoint' ? 0.5 : scope === 'regional' ? 2.3 : 4.4;
   const ringNodes = getCellsByRadialDistance(centerIndex, maxDist, cells.length);
 
+  const isHillyArea = (targetTerrain === 'mountains' || targetTerrain === 'hills') && (
+    cells[centerIndex]?.terrain === 'hills' || cells[centerIndex]?.terrain === 'mountains' ||
+    getAdjacentCellIndices(centerIndex, 1, cells.length).some((nIdx) => cells[nIdx]?.terrain === 'hills' || cells[nIdx]?.terrain === 'mountains')
+  );
+
+  const isArcticTrigger = (targetTerrain === 'desert' || targetTerrain === 'tundra') && (
+    cells[centerIndex]?.climate === 'arctic' || Math.abs(cells[centerIndex]?.lat || 0) >= 60
+  );
+
   let volcanoCount = 0;
   let mountainCount = 0;
   let hillsCount = 0;
@@ -545,12 +556,15 @@ export function applyCascadingTerrainModification(
   let swampCount = 0;
   let shallowsCount = 0;
   let oceanCount = 0;
+  let desertCount = 0;
+  let tundraCount = 0;
 
   for (const node of ringNodes) {
     const cell = { ...updated[node.cellIndex] };
     const ring = node.ring;
 
     if (targetTerrain === 'volcanic') {
+      const origTerrain = cell.terrain;
       if (ring === 0) {
         cell.terrain = 'volcanic';
         cell.elevation = 0.95;
@@ -564,25 +578,52 @@ export function applyCascadingTerrainModification(
         };
         volcanoCount++;
       } else if (ring === 1 && scope !== 'pinpoint') {
-        cell.terrain = 'mountains';
-        cell.elevation = Math.max(0.72, cell.elevation + 0.65);
-        cell.resource = cell.resource || 'Iron Ore Deposits';
-        mountainCount++;
-      } else if (ring === 2 && scope !== 'pinpoint') {
-        cell.terrain = 'hills';
-        cell.elevation = Math.max(0.46, cell.elevation + 0.45);
-        cell.fertility = Math.max(0.65, cell.fertility + 0.25);
-        hillsCount++;
-      } else if (ring === 3 && scope === 'cascade') {
-        cell.elevation = Math.max(0.20, cell.elevation + 0.35);
-        cell.fertility = Math.max(0.85, cell.fertility + 0.4);
-        cell.moisture = Math.max(0.55, cell.moisture + 0.25);
-        if (cell.moisture > 0.6) {
-          cell.terrain = 'forest';
-          forestCount++;
+        if (origTerrain === 'volcanic') {
+          cell.terrain = 'volcanic';
+          cell.elevation = Math.max(0.92, cell.elevation);
+          volcanoCount++;
         } else {
-          cell.terrain = 'plains';
-          plainsCount++;
+          cell.terrain = 'mountains';
+          cell.elevation = Math.max(0.72, cell.elevation + 0.65);
+          cell.resource = cell.resource || 'Iron Ore Deposits';
+          mountainCount++;
+        }
+      } else if (ring === 2 && scope !== 'pinpoint') {
+        if (origTerrain === 'volcanic') {
+          cell.terrain = 'volcanic';
+          volcanoCount++;
+        } else if (origTerrain === 'mountains') {
+          cell.terrain = 'mountains';
+          cell.elevation = Math.max(0.70, cell.elevation + 0.3);
+          mountainCount++;
+        } else {
+          cell.terrain = 'hills';
+          cell.elevation = Math.max(0.46, cell.elevation + 0.45);
+          cell.fertility = Math.max(0.65, cell.fertility + 0.25);
+          hillsCount++;
+        }
+      } else if (ring === 3 && scope === 'cascade') {
+        if (origTerrain === 'volcanic') {
+          cell.terrain = 'volcanic';
+          volcanoCount++;
+        } else if (origTerrain === 'mountains') {
+          cell.terrain = 'mountains';
+          mountainCount++;
+        } else if (origTerrain === 'hills') {
+          cell.terrain = 'hills';
+          cell.elevation = Math.max(0.44, cell.elevation + 0.2);
+          hillsCount++;
+        } else {
+          cell.elevation = Math.max(0.20, cell.elevation + 0.35);
+          cell.fertility = Math.max(0.85, cell.fertility + 0.4);
+          cell.moisture = Math.max(0.55, cell.moisture + 0.25);
+          if (cell.moisture > 0.6) {
+            cell.terrain = 'forest';
+            forestCount++;
+          } else {
+            cell.terrain = 'plains';
+            plainsCount++;
+          }
         }
       } else if (ring >= 4 && scope === 'cascade') {
         if (cell.elevation < 0 && cell.elevation >= -0.35) {
@@ -592,6 +633,7 @@ export function applyCascadingTerrainModification(
         }
       }
     } else if (targetTerrain === 'mountains') {
+      const origTerrain = cell.terrain;
       if (ring === 0) {
         cell.terrain = 'mountains';
         cell.elevation = 0.88;
@@ -602,15 +644,38 @@ export function applyCascadingTerrainModification(
         cell.elevation = Math.max(0.70, cell.elevation + 0.55);
         mountainCount++;
       } else if (ring === 2 && scope !== 'pinpoint') {
-        cell.terrain = 'hills';
-        cell.elevation = Math.max(0.44, cell.elevation + 0.38);
-        hillsCount++;
+        if (origTerrain === 'mountains') {
+          cell.terrain = 'mountains';
+          cell.elevation = Math.max(0.72, cell.elevation + 0.2);
+          mountainCount++;
+        } else if (isHillyArea && origTerrain === 'hills') {
+          cell.terrain = 'mountains';
+          cell.elevation = Math.max(0.70, cell.elevation + 0.35);
+          mountainCount++;
+        } else {
+          cell.terrain = 'hills';
+          cell.elevation = Math.max(0.44, cell.elevation + 0.38);
+          hillsCount++;
+        }
       } else if (ring === 3 && scope === 'cascade') {
-        cell.elevation = Math.max(0.18, cell.elevation + 0.25);
-        cell.fertility = Math.max(0.70, cell.fertility + 0.2);
-        cell.terrain = cell.moisture > 0.45 ? 'forest' : 'plains';
-        if (cell.terrain === 'forest') forestCount++;
-        else plainsCount++;
+        if (origTerrain === 'mountains') {
+          cell.terrain = 'mountains';
+          mountainCount++;
+        } else if (origTerrain === 'hills') {
+          cell.terrain = 'hills';
+          cell.elevation = Math.max(0.44, cell.elevation + 0.25);
+          hillsCount++;
+        } else if (isHillyArea) {
+          cell.terrain = 'hills';
+          cell.elevation = Math.max(0.42, cell.elevation + 0.28);
+          hillsCount++;
+        } else {
+          cell.elevation = Math.max(0.18, cell.elevation + 0.25);
+          cell.fertility = Math.max(0.70, cell.fertility + 0.2);
+          cell.terrain = cell.moisture > 0.45 ? 'forest' : 'plains';
+          if (cell.terrain === 'forest') forestCount++;
+          else plainsCount++;
+        }
       } else if (ring >= 4 && scope === 'cascade') {
         if (cell.elevation < 0 && cell.elevation >= -0.35) {
           cell.elevation = -0.16;
@@ -619,6 +684,7 @@ export function applyCascadingTerrainModification(
         }
       }
     } else if (targetTerrain === 'hills') {
+      const origTerrain = cell.terrain;
       if (ring === 0) {
         cell.terrain = 'hills';
         cell.elevation = 0.52;
@@ -626,16 +692,35 @@ export function applyCascadingTerrainModification(
         cell.resource = cell.resource || 'Silver Outcrops';
         hillsCount++;
       } else if (ring === 1 && scope !== 'pinpoint') {
-        cell.terrain = 'hills';
-        cell.elevation = Math.max(0.44, cell.elevation + 0.30);
-        hillsCount++;
+        if (origTerrain === 'mountains') {
+          cell.terrain = 'mountains';
+          mountainCount++;
+        } else {
+          cell.terrain = 'hills';
+          cell.elevation = Math.max(0.44, cell.elevation + 0.30);
+          hillsCount++;
+        }
       } else if (ring === 2 && scope !== 'pinpoint') {
-        cell.elevation = Math.max(0.20, cell.elevation + 0.20);
-        cell.terrain = cell.moisture > 0.5 ? 'forest' : 'plains';
-        if (cell.terrain === 'forest') forestCount++;
-        else plainsCount++;
+        if (origTerrain === 'mountains') {
+          cell.terrain = 'mountains';
+          mountainCount++;
+        } else if (origTerrain === 'hills') {
+          cell.terrain = 'hills';
+          hillsCount++;
+        } else {
+          cell.elevation = Math.max(0.20, cell.elevation + 0.20);
+          cell.terrain = cell.moisture > 0.5 ? 'forest' : 'plains';
+          if (cell.terrain === 'forest') forestCount++;
+          else plainsCount++;
+        }
       } else if (ring >= 3 && scope === 'cascade') {
-        if (cell.elevation < 0 && cell.elevation >= -0.35) {
+        if (origTerrain === 'mountains') {
+          cell.terrain = 'mountains';
+          mountainCount++;
+        } else if (origTerrain === 'hills') {
+          cell.terrain = 'hills';
+          hillsCount++;
+        } else if (cell.elevation < 0 && cell.elevation >= -0.35) {
           cell.elevation = -0.15;
           cell.terrain = 'shallow_water';
           shallowsCount++;
@@ -716,6 +801,78 @@ export function applyCascadingTerrainModification(
           shallowsCount++;
         }
       }
+    } else if (targetTerrain === 'shallow_water') {
+      const origElev = cell.elevation;
+      const origTerrain = cell.terrain;
+
+      if (ring === 0) {
+        // Stage 1 Epicenter: Single step down (creates lake or drops 1 tier)
+        if (origTerrain === 'mountains') {
+          cell.terrain = 'hills';
+          cell.elevation = 0.48;
+          hillsCount++;
+        } else if (origTerrain === 'hills') {
+          cell.terrain = 'plains';
+          cell.elevation = 0.22;
+          cell.fertility = Math.max(0.70, cell.fertility + 0.15);
+          plainsCount++;
+        } else if (origTerrain === 'shallow_water') {
+          // Shallow water drops 1 step to ocean
+          cell.terrain = 'ocean';
+          cell.elevation = -0.55;
+          oceanCount++;
+        } else if (origTerrain === 'ocean') {
+          // Ocean drops 1 step to deep ocean
+          cell.terrain = 'deep_ocean';
+          cell.elevation = -0.85;
+          oceanCount++;
+        } else if (origTerrain === 'deep_ocean') {
+          cell.elevation = Math.min(origElev - 0.05, -0.92);
+          oceanCount++;
+        } else {
+          // Lowland land biome (plains, forest, swamp, desert, tundra, volcanic):
+          // Drops 1 single step down to form an inland lake / shallow waterway
+          cell.terrain = 'shallow_water';
+          cell.elevation = -0.15;
+          cell.moisture = Math.max(0.85, cell.moisture + 0.35);
+          cell.population = 0;
+          cell.cityId = null;
+          cell.civilizationId = null;
+          shallowsCount++;
+        }
+      } else if (ring === 1 && scope !== 'pinpoint') {
+        // Ring 1: Riparian shoreline buffer around the new lake
+        if (origTerrain === 'deep_ocean' || origTerrain === 'ocean' || origTerrain === 'shallow_water') {
+          cell.elevation = Math.min(origElev, cell.elevation);
+        } else if (origElev > 0.6) {
+          cell.elevation = Math.max(0.48, origElev - 0.15);
+        } else if (origElev > 0.4) {
+          cell.elevation = Math.max(0.22, origElev - 0.12);
+        } else {
+          cell.moisture = Math.min(1.0, cell.moisture + 0.35);
+          cell.fertility = Math.min(1.0, cell.fertility + 0.30);
+          if (origTerrain === 'desert') {
+            cell.terrain = 'plains';
+            plainsCount++;
+          } else if (origElev <= 0.05 && cell.moisture > 0.7) {
+            cell.terrain = 'swamp';
+            swampCount++;
+          }
+        }
+      } else if (ring >= 2 && scope === 'cascade') {
+        // Outer rings: Watershed hydration
+        if (origTerrain !== 'deep_ocean' && origTerrain !== 'ocean' && origTerrain !== 'shallow_water') {
+          cell.moisture = Math.min(1.0, cell.moisture + 0.20);
+          cell.fertility = Math.min(1.0, cell.fertility + 0.15);
+          if (origTerrain === 'desert' && cell.moisture > 0.35) {
+            cell.terrain = 'plains';
+            plainsCount++;
+          }
+        }
+      }
+
+      // Invariant: Sinking terrain must never accidentally raise elevation
+      cell.elevation = Math.min(origElev, cell.elevation);
     } else if (targetTerrain === 'deep_ocean' || targetTerrain === 'ocean') {
       const origElev = cell.elevation;
       const origTerrain = cell.terrain;
@@ -818,17 +975,96 @@ export function applyCascadingTerrainModification(
       // Invariant: Never accidentally raise elevation when sinking ocean
       cell.elevation = Math.min(origElev, cell.elevation);
     } else if (targetTerrain === 'desert') {
+      const isCellArctic = isArcticTrigger || cell.climate === 'arctic' || Math.abs(cell.lat) >= 60;
+
+      if (isCellArctic) {
+        // Triggered in arctic: trigger frozen tundra followed by plains
+        if (ring === 0) {
+          cell.terrain = 'tundra';
+          cell.climate = 'arctic';
+          cell.elevation = Math.max(0.18, cell.elevation);
+          cell.moisture = 0.12;
+          cell.fertility = 0.15;
+          cell.resource = cell.resource || 'Mammoth Ivory Vein';
+          tundraCount++;
+        } else if (ring === 1 && scope !== 'pinpoint') {
+          // Followed by plains
+          if (cell.elevation > 0) {
+            cell.terrain = 'plains';
+            cell.moisture = 0.28;
+            cell.fertility = 0.40;
+            plainsCount++;
+          }
+        } else if (ring >= 2 && scope === 'cascade') {
+          // Outer perimeter
+          if (cell.elevation > 0 && cell.terrain === 'desert') {
+            cell.terrain = 'plains';
+            plainsCount++;
+          }
+        }
+      } else {
+        // Non-arctic: desert --> plains to forest in more temperate climates
+        if (ring === 0) {
+          cell.terrain = 'desert';
+          cell.climate = 'arid';
+          cell.elevation = Math.max(0.18, cell.elevation);
+          cell.moisture = 0.05;
+          cell.fertility = 0.12;
+          cell.resource = cell.resource || 'Ancient Sandstone Ruins';
+          desertCount++;
+        } else if (ring === 1 && scope !== 'pinpoint') {
+          // desert --> plains
+          if (cell.elevation > 0) {
+            cell.terrain = 'plains';
+            cell.moisture = 0.28;
+            cell.fertility = 0.50;
+            plainsCount++;
+          }
+        } else if (ring === 2 && scope !== 'pinpoint') {
+          // plains to forest in more temperate climates
+          const isTemperate = cell.climate === 'temperate' || cell.climate === 'tropical' || cell.climate === 'cold' || Math.abs(cell.lat) < 58;
+          if (cell.elevation > 0) {
+            if (isTemperate) {
+              cell.terrain = 'forest';
+              cell.moisture = Math.max(0.55, cell.moisture + 0.20);
+              cell.fertility = Math.max(0.65, cell.fertility + 0.20);
+              forestCount++;
+            } else {
+              cell.terrain = 'plains';
+              cell.moisture = Math.max(0.30, cell.moisture);
+              cell.fertility = Math.max(0.50, cell.fertility);
+              plainsCount++;
+            }
+          }
+        } else if (ring >= 3 && scope === 'cascade') {
+          // Outer cascade rings in temperate climates: buffer woodlands / fertile plains
+          const isTemperate = cell.climate === 'temperate' || cell.climate === 'tropical' || cell.climate === 'cold';
+          if (cell.elevation > 0) {
+            if (isTemperate && cell.moisture > 0.45) {
+              cell.terrain = 'forest';
+              forestCount++;
+            } else if (cell.terrain === 'desert') {
+              cell.terrain = 'plains';
+              plainsCount++;
+            }
+          }
+        }
+      }
+    } else if (targetTerrain === 'tundra') {
       if (ring === 0) {
-        cell.terrain = 'desert';
-        cell.moisture = 0.05;
-        cell.fertility = 0.15;
-      } else if (ring === 1 && scope !== 'pinpoint') {
-        cell.terrain = 'desert';
+        cell.terrain = 'tundra';
+        cell.climate = 'arctic';
+        cell.elevation = Math.max(0.18, cell.elevation);
         cell.moisture = 0.12;
-        cell.fertility = 0.20;
-      } else if (ring === 2 && scope !== 'pinpoint') {
-        cell.moisture = Math.max(0.15, cell.moisture - 0.25);
-        if (cell.terrain === 'forest') cell.terrain = 'plains';
+        cell.fertility = 0.15;
+        tundraCount++;
+      } else if (ring === 1 && scope !== 'pinpoint') {
+        if (cell.elevation > 0) {
+          cell.terrain = 'plains';
+          cell.moisture = 0.28;
+          cell.fertility = 0.40;
+          plainsCount++;
+        }
       }
     }
 
@@ -840,15 +1076,26 @@ export function applyCascadingTerrainModification(
   if (targetTerrain === 'volcanic') {
     narrative = `Unleashed a volcanic caldera at the epicenter, triggering cascading tectonic uplift that forged ${mountainCount} mountain ridges, ${hillsCount} rugged foothills, and ${plainsCount + forestCount} fertile ash-nourished lowlands.`;
   } else if (targetTerrain === 'mountains') {
-    narrative = `Raised alpine spires that rippled outward into ${mountainCount} mountain crests, surrounded by ${hillsCount} foothills and ${plainsCount + forestCount} piedmont plains.`;
+    const hillText = isHillyArea ? ` The uplift resonated through the hilly region, generating ${mountainCount} alpine peaks and ${hillsCount} rugged highlands without forest degradation.` : '';
+    narrative = `Raised alpine spires${hillText} that rippled outward into ${mountainCount} mountain crests and ${hillsCount} foothills.`;
   } else if (targetTerrain === 'hills') {
     narrative = `Erected rolling highlands and ${hillsCount} hill formations descending into fertile valleys.`;
   } else if (targetTerrain === 'swamp') {
     narrative = `Sank the terrain into a primeval mire, spreading moisture across ${swampCount} swamp wetlands and mist-shrouded bayous.`;
   } else if (targetTerrain === 'forest') {
     narrative = `Seeded an ancient woodland canopy that cast transpiration rainfall across ${forestCount} forest groves and surrounding plains.`;
+  } else if (targetTerrain === 'shallow_water') {
+    narrative = `Sank the terrain by a single step down, forming an inland lake (${shallowsCount} shallows, ${plainsCount} fertile riparian shores, and ${hillsCount} foothills).`;
   } else if (targetTerrain === 'deep_ocean' || targetTerrain === 'ocean') {
     narrative = `Cleaved an abyssal chasm into the crust, inundating ${oceanCount} ocean depths and eroding surrounding coasts.`;
+  } else if (targetTerrain === 'desert') {
+    if (isArcticTrigger) {
+      narrative = `Unleashed a sub-zero polar freeze across the arctic, transforming ${tundraCount} zones into frozen tundra followed by ${plainsCount} sub-polar plains.`;
+    } else {
+      narrative = `Forged a sun-scorched desert waste, cascading from ${desertCount} arid dunes into ${plainsCount} surrounding plains, and blossoming into ${forestCount} temperate forests.`;
+    }
+  } else if (targetTerrain === 'tundra') {
+    narrative = `Summoned a frozen permafrost tundra across ${tundraCount} zones cascading into ${plainsCount} plains.`;
   } else {
     narrative = `Shaped the bedrock into ${targetTerrain.replace('_', ' ')} across ${ringNodes.length} coordinate zones.`;
   }
@@ -866,6 +1113,8 @@ export function applyCascadingTerrainModification(
       swampCount,
       shallowsCount,
       oceanCount,
+      desertCount,
+      tundraCount,
       totalAffected: ringNodes.length,
       logNarrative: narrative,
     },
@@ -963,9 +1212,73 @@ export function getMultiCellRadialNodes(
 }
 
 /**
+ * Detect adjacent similar terrain that should seamlessly integrate into the power's epicenter,
+ * expanding the action as if both were selected together.
+ *
+ * Rules:
+ * - Volcano: if adjacent (radius 1) to another volcano, expands that volcano (includes adjacent volcano cells into epicenter).
+ * - Mountains: if adjacent to another mountain, expands the mountain chain into the epicenter.
+ * - Hills: if adjacent to existing hills, expands the rolling highlands into the epicenter.
+ * - If similar terrain is at the edge or outside of the cascade (e.g. distance >= 2 or outside), it is NOT sucked in.
+ */
+export function detectAdjacentSimilarTerrain(
+  cells: WorldCell[],
+  targetIndices: number[],
+  targetTerrain: TerrainType
+): { expandedIndices: number[]; detectedCount: number } {
+  const expandedSet = new Set<number>(targetIndices);
+
+  let similarTypes: TerrainType[] = [];
+  if (targetTerrain === 'volcanic') {
+    similarTypes = ['volcanic'];
+  } else if (targetTerrain === 'mountains') {
+    similarTypes = ['mountains'];
+  } else if (targetTerrain === 'hills') {
+    similarTypes = ['hills'];
+  } else if (targetTerrain === 'forest') {
+    similarTypes = ['forest'];
+  } else if (targetTerrain === 'swamp') {
+    similarTypes = ['swamp'];
+  } else if (targetTerrain === 'desert') {
+    const isArcticTarget = targetIndices.some((idx) => cells[idx]?.climate === 'arctic' || Math.abs(cells[idx]?.lat || 0) >= 60);
+    similarTypes = isArcticTarget ? ['desert', 'tundra'] : ['desert'];
+  } else if (targetTerrain === 'tundra') {
+    similarTypes = ['tundra', 'desert'];
+  } else if (targetTerrain === 'shallow_water') {
+    similarTypes = ['shallow_water'];
+  } else if (targetTerrain === 'deep_ocean' || targetTerrain === 'ocean') {
+    similarTypes = ['deep_ocean', 'ocean'];
+  }
+
+  if (similarTypes.length === 0) {
+    return { expandedIndices: targetIndices, detectedCount: 0 };
+  }
+
+  // Find cells directly adjacent (radius 1) to any cell in targetIndices that match similarTypes
+  for (const tIdx of targetIndices) {
+    const neighbors = getAdjacentCellIndices(tIdx, 1, cells.length);
+    for (const nIdx of neighbors) {
+      if (expandedSet.has(nIdx)) continue;
+      const neighborCell = cells[nIdx];
+      if (neighborCell && similarTypes.includes(neighborCell.terrain)) {
+        expandedSet.add(nIdx);
+      }
+    }
+  }
+
+  const detectedCount = expandedSet.size - targetIndices.length;
+  return { expandedIndices: Array.from(expandedSet), detectedCount };
+}
+
+/**
  * Apply cascading physical terrain modification across multiple selected blocks.
  * ALL cells in targetIndices are transformed simultaneously into the target terrain (Ring 0),
  * and the geological cascade ripples outward from their collective boundary.
+ *
+ * Enhanced with intelligent similar terrain detection and highland preservation:
+ * - Volcano: If adjacent to another volcano, expands that volcano (treating both as epicenter).
+ * - Mountains: If in a hilly area, preserves hills and elevates them into mountains instead of generating forests.
+ * - Edge/outside: Similar terrain at the edge (Ring 4) or outside the cascade remains untouched.
  */
 export function applyMultiCellCascadingTerrainModification(
   cells: WorldCell[],
@@ -993,9 +1306,29 @@ export function applyMultiCellCascadingTerrainModification(
     };
   }
 
+  // 1. Detect directly adjacent similar terrain (e.g. adjacent volcano expands the volcano)
+  const { expandedIndices: effectiveTargets, detectedCount } = detectAdjacentSimilarTerrain(
+    cells,
+    targetIndices,
+    targetTerrain
+  );
+
+  // 2. Detect if the trigger occurs in a hilly area (existing hills or mountains adjacent or directly targeted)
+  const isHillyArea = (targetTerrain === 'mountains' || targetTerrain === 'hills') && (
+    targetIndices.some((idx) => cells[idx]?.terrain === 'hills' || cells[idx]?.terrain === 'mountains') ||
+    targetIndices.some((tIdx) => {
+      const neighbors = getAdjacentCellIndices(tIdx, 1, cells.length);
+      return neighbors.some((nIdx) => cells[nIdx]?.terrain === 'hills' || cells[nIdx]?.terrain === 'mountains');
+    })
+  );
+
+  const isArcticTrigger = (targetTerrain === 'desert' || targetTerrain === 'tundra') && (
+    targetIndices.some((idx) => cells[idx]?.climate === 'arctic' || Math.abs(cells[idx]?.lat || 0) >= 60)
+  );
+
   const updated = [...cells];
   const maxDist = scope === 'pinpoint' ? 0.5 : scope === 'regional' ? 2.3 : 4.4;
-  const ringNodes = getMultiCellRadialNodes(targetIndices, maxDist, cells.length);
+  const ringNodes = getMultiCellRadialNodes(effectiveTargets, maxDist, cells.length);
 
   let volcanoCount = 0;
   let mountainCount = 0;
@@ -1005,12 +1338,15 @@ export function applyMultiCellCascadingTerrainModification(
   let swampCount = 0;
   let shallowsCount = 0;
   let oceanCount = 0;
+  let desertCount = 0;
+  let tundraCount = 0;
 
   for (const node of ringNodes) {
     const cell = { ...updated[node.cellIndex] };
     const ring = node.ring;
 
     if (targetTerrain === 'volcanic') {
+      const origTerrain = cell.terrain;
       if (ring === 0) {
         cell.terrain = 'volcanic';
         cell.elevation = 0.95;
@@ -1024,25 +1360,52 @@ export function applyMultiCellCascadingTerrainModification(
         };
         volcanoCount++;
       } else if (ring === 1 && scope !== 'pinpoint') {
-        cell.terrain = 'mountains';
-        cell.elevation = Math.max(0.72, cell.elevation + 0.65);
-        cell.resource = cell.resource || 'Iron Ore Deposits';
-        mountainCount++;
-      } else if (ring === 2 && scope !== 'pinpoint') {
-        cell.terrain = 'hills';
-        cell.elevation = Math.max(0.46, cell.elevation + 0.45);
-        cell.fertility = Math.max(0.65, cell.fertility + 0.25);
-        hillsCount++;
-      } else if (ring === 3 && scope === 'cascade') {
-        cell.elevation = Math.max(0.20, cell.elevation + 0.35);
-        cell.fertility = Math.max(0.85, cell.fertility + 0.4);
-        cell.moisture = Math.max(0.55, cell.moisture + 0.25);
-        if (cell.moisture > 0.6) {
-          cell.terrain = 'forest';
-          forestCount++;
+        if (origTerrain === 'volcanic') {
+          cell.terrain = 'volcanic';
+          cell.elevation = Math.max(0.92, cell.elevation);
+          volcanoCount++;
         } else {
-          cell.terrain = 'plains';
-          plainsCount++;
+          cell.terrain = 'mountains';
+          cell.elevation = Math.max(0.72, cell.elevation + 0.65);
+          cell.resource = cell.resource || 'Iron Ore Deposits';
+          mountainCount++;
+        }
+      } else if (ring === 2 && scope !== 'pinpoint') {
+        if (origTerrain === 'volcanic') {
+          cell.terrain = 'volcanic';
+          volcanoCount++;
+        } else if (origTerrain === 'mountains') {
+          cell.terrain = 'mountains';
+          cell.elevation = Math.max(0.70, cell.elevation + 0.3);
+          mountainCount++;
+        } else {
+          cell.terrain = 'hills';
+          cell.elevation = Math.max(0.46, cell.elevation + 0.45);
+          cell.fertility = Math.max(0.65, cell.fertility + 0.25);
+          hillsCount++;
+        }
+      } else if (ring === 3 && scope === 'cascade') {
+        if (origTerrain === 'volcanic') {
+          cell.terrain = 'volcanic';
+          volcanoCount++;
+        } else if (origTerrain === 'mountains') {
+          cell.terrain = 'mountains';
+          mountainCount++;
+        } else if (origTerrain === 'hills') {
+          cell.terrain = 'hills';
+          cell.elevation = Math.max(0.44, cell.elevation + 0.2);
+          hillsCount++;
+        } else {
+          cell.elevation = Math.max(0.20, cell.elevation + 0.35);
+          cell.fertility = Math.max(0.85, cell.fertility + 0.4);
+          cell.moisture = Math.max(0.55, cell.moisture + 0.25);
+          if (cell.moisture > 0.6) {
+            cell.terrain = 'forest';
+            forestCount++;
+          } else {
+            cell.terrain = 'plains';
+            plainsCount++;
+          }
         }
       } else if (ring >= 4 && scope === 'cascade') {
         if (cell.elevation < 0 && cell.elevation >= -0.35) {
@@ -1052,6 +1415,7 @@ export function applyMultiCellCascadingTerrainModification(
         }
       }
     } else if (targetTerrain === 'mountains') {
+      const origTerrain = cell.terrain;
       if (ring === 0) {
         cell.terrain = 'mountains';
         cell.elevation = 0.88;
@@ -1062,16 +1426,46 @@ export function applyMultiCellCascadingTerrainModification(
         cell.elevation = Math.max(0.70, cell.elevation + 0.55);
         mountainCount++;
       } else if (ring === 2 && scope !== 'pinpoint') {
-        cell.terrain = 'hills';
-        cell.elevation = Math.max(0.44, cell.elevation + 0.38);
-        hillsCount++;
+        if (origTerrain === 'mountains') {
+          cell.terrain = 'mountains';
+          cell.elevation = Math.max(0.72, cell.elevation + 0.2);
+          mountainCount++;
+        } else if (isHillyArea && origTerrain === 'hills') {
+          // In a hilly area, existing hills in Ring 2 elevate into mountain peaks
+          cell.terrain = 'mountains';
+          cell.elevation = Math.max(0.70, cell.elevation + 0.35);
+          mountainCount++;
+        } else {
+          cell.terrain = 'hills';
+          cell.elevation = Math.max(0.44, cell.elevation + 0.38);
+          hillsCount++;
+        }
       } else if (ring === 3 && scope === 'cascade') {
-        cell.elevation = Math.max(0.18, cell.elevation + 0.25);
-        cell.fertility = Math.max(0.70, cell.fertility + 0.2);
-        cell.terrain = cell.moisture > 0.45 ? 'forest' : 'plains';
-        if (cell.terrain === 'forest') forestCount++;
-        else plainsCount++;
+        if (origTerrain === 'mountains') {
+          // Never downgrade existing mountains to forests/plains
+          cell.terrain = 'mountains';
+          cell.elevation = Math.max(0.68, cell.elevation);
+          mountainCount++;
+        } else if (origTerrain === 'hills') {
+          // Over hills, never generate forests: preserve and reinforce the hills
+          cell.terrain = 'hills';
+          cell.elevation = Math.max(0.44, cell.elevation + 0.25);
+          hillsCount++;
+        } else if (isHillyArea) {
+          // In a hilly area, generate hills and mountains instead of forests
+          cell.terrain = 'hills';
+          cell.elevation = Math.max(0.42, cell.elevation + 0.28);
+          hillsCount++;
+        } else {
+          // Normal area (not in a hilly region and not already hills/mountains): works as it does now
+          cell.elevation = Math.max(0.18, cell.elevation + 0.25);
+          cell.fertility = Math.max(0.70, cell.fertility + 0.2);
+          cell.terrain = cell.moisture > 0.45 ? 'forest' : 'plains';
+          if (cell.terrain === 'forest') forestCount++;
+          else plainsCount++;
+        }
       } else if (ring >= 4 && scope === 'cascade') {
+        // At the edge of the cascade or outside, works as it does now
         if (cell.elevation < 0 && cell.elevation >= -0.35) {
           cell.elevation = -0.16;
           cell.terrain = 'shallow_water';
@@ -1079,6 +1473,7 @@ export function applyMultiCellCascadingTerrainModification(
         }
       }
     } else if (targetTerrain === 'hills') {
+      const origTerrain = cell.terrain;
       if (ring === 0) {
         cell.terrain = 'hills';
         cell.elevation = 0.52;
@@ -1086,16 +1481,35 @@ export function applyMultiCellCascadingTerrainModification(
         cell.resource = cell.resource || 'Silver Outcrops';
         hillsCount++;
       } else if (ring === 1 && scope !== 'pinpoint') {
-        cell.terrain = 'hills';
-        cell.elevation = Math.max(0.44, cell.elevation + 0.30);
-        hillsCount++;
+        if (origTerrain === 'mountains') {
+          cell.terrain = 'mountains';
+          mountainCount++;
+        } else {
+          cell.terrain = 'hills';
+          cell.elevation = Math.max(0.44, cell.elevation + 0.30);
+          hillsCount++;
+        }
       } else if (ring === 2 && scope !== 'pinpoint') {
-        cell.elevation = Math.max(0.20, cell.elevation + 0.20);
-        cell.terrain = cell.moisture > 0.5 ? 'forest' : 'plains';
-        if (cell.terrain === 'forest') forestCount++;
-        else plainsCount++;
+        if (origTerrain === 'mountains') {
+          cell.terrain = 'mountains';
+          mountainCount++;
+        } else if (origTerrain === 'hills') {
+          cell.terrain = 'hills';
+          hillsCount++;
+        } else {
+          cell.elevation = Math.max(0.20, cell.elevation + 0.20);
+          cell.terrain = cell.moisture > 0.5 ? 'forest' : 'plains';
+          if (cell.terrain === 'forest') forestCount++;
+          else plainsCount++;
+        }
       } else if (ring >= 3 && scope === 'cascade') {
-        if (cell.elevation < 0 && cell.elevation >= -0.35) {
+        if (origTerrain === 'mountains') {
+          cell.terrain = 'mountains';
+          mountainCount++;
+        } else if (origTerrain === 'hills') {
+          cell.terrain = 'hills';
+          hillsCount++;
+        } else if (cell.elevation < 0 && cell.elevation >= -0.35) {
           cell.elevation = -0.15;
           cell.terrain = 'shallow_water';
           shallowsCount++;
@@ -1176,6 +1590,78 @@ export function applyMultiCellCascadingTerrainModification(
           shallowsCount++;
         }
       }
+    } else if (targetTerrain === 'shallow_water') {
+      const origElev = cell.elevation;
+      const origTerrain = cell.terrain;
+
+      if (ring === 0) {
+        // Stage 1 Epicenter: Single step down (creates lake or drops 1 tier)
+        if (origTerrain === 'mountains') {
+          cell.terrain = 'hills';
+          cell.elevation = 0.48;
+          hillsCount++;
+        } else if (origTerrain === 'hills') {
+          cell.terrain = 'plains';
+          cell.elevation = 0.22;
+          cell.fertility = Math.max(0.70, cell.fertility + 0.15);
+          plainsCount++;
+        } else if (origTerrain === 'shallow_water') {
+          // Shallow water drops 1 step to ocean
+          cell.terrain = 'ocean';
+          cell.elevation = -0.55;
+          oceanCount++;
+        } else if (origTerrain === 'ocean') {
+          // Ocean drops 1 step to deep ocean
+          cell.terrain = 'deep_ocean';
+          cell.elevation = -0.85;
+          oceanCount++;
+        } else if (origTerrain === 'deep_ocean') {
+          cell.elevation = Math.min(origElev - 0.05, -0.92);
+          oceanCount++;
+        } else {
+          // Lowland land biome (plains, forest, swamp, desert, tundra, volcanic):
+          // Drops 1 single step down to form an inland lake / shallow waterway
+          cell.terrain = 'shallow_water';
+          cell.elevation = -0.15;
+          cell.moisture = Math.max(0.85, cell.moisture + 0.35);
+          cell.population = 0;
+          cell.cityId = null;
+          cell.civilizationId = null;
+          shallowsCount++;
+        }
+      } else if (ring === 1 && scope !== 'pinpoint') {
+        // Ring 1: Riparian shoreline buffer around the new lake
+        if (origTerrain === 'deep_ocean' || origTerrain === 'ocean' || origTerrain === 'shallow_water') {
+          cell.elevation = Math.min(origElev, cell.elevation);
+        } else if (origElev > 0.6) {
+          cell.elevation = Math.max(0.48, origElev - 0.15);
+        } else if (origElev > 0.4) {
+          cell.elevation = Math.max(0.22, origElev - 0.12);
+        } else {
+          cell.moisture = Math.min(1.0, cell.moisture + 0.35);
+          cell.fertility = Math.min(1.0, cell.fertility + 0.30);
+          if (origTerrain === 'desert') {
+            cell.terrain = 'plains';
+            plainsCount++;
+          } else if (origElev <= 0.05 && cell.moisture > 0.7) {
+            cell.terrain = 'swamp';
+            swampCount++;
+          }
+        }
+      } else if (ring >= 2 && scope === 'cascade') {
+        // Outer rings: Watershed hydration
+        if (origTerrain !== 'deep_ocean' && origTerrain !== 'ocean' && origTerrain !== 'shallow_water') {
+          cell.moisture = Math.min(1.0, cell.moisture + 0.20);
+          cell.fertility = Math.min(1.0, cell.fertility + 0.15);
+          if (origTerrain === 'desert' && cell.moisture > 0.35) {
+            cell.terrain = 'plains';
+            plainsCount++;
+          }
+        }
+      }
+
+      // Invariant: Sinking terrain must never accidentally raise elevation
+      cell.elevation = Math.min(origElev, cell.elevation);
     } else if (targetTerrain === 'deep_ocean' || targetTerrain === 'ocean') {
       const origElev = cell.elevation;
       const origTerrain = cell.terrain;
@@ -1267,37 +1753,132 @@ export function applyMultiCellCascadingTerrainModification(
       // Invariant: Never accidentally raise elevation when sinking ocean
       cell.elevation = Math.min(origElev, cell.elevation);
     } else if (targetTerrain === 'desert') {
+      const isCellArctic = isArcticTrigger || cell.climate === 'arctic' || Math.abs(cell.lat) >= 60;
+
+      if (isCellArctic) {
+        // Triggered in arctic: trigger frozen tundra followed by plains
+        if (ring === 0) {
+          cell.terrain = 'tundra';
+          cell.climate = 'arctic';
+          cell.elevation = Math.max(0.18, cell.elevation);
+          cell.moisture = 0.12;
+          cell.fertility = 0.15;
+          cell.resource = cell.resource || 'Mammoth Ivory Vein';
+          tundraCount++;
+        } else if (ring === 1 && scope !== 'pinpoint') {
+          // Followed by plains
+          if (cell.elevation > 0) {
+            cell.terrain = 'plains';
+            cell.moisture = 0.28;
+            cell.fertility = 0.40;
+            plainsCount++;
+          }
+        } else if (ring >= 2 && scope === 'cascade') {
+          // Outer perimeter
+          if (cell.elevation > 0 && cell.terrain === 'desert') {
+            cell.terrain = 'plains';
+            plainsCount++;
+          }
+        }
+      } else {
+        // Non-arctic: desert --> plains to forest in more temperate climates
+        if (ring === 0) {
+          cell.terrain = 'desert';
+          cell.climate = 'arid';
+          cell.elevation = Math.max(0.18, cell.elevation);
+          cell.moisture = 0.05;
+          cell.fertility = 0.12;
+          cell.resource = cell.resource || 'Ancient Sandstone Ruins';
+          desertCount++;
+        } else if (ring === 1 && scope !== 'pinpoint') {
+          // desert --> plains
+          if (cell.elevation > 0) {
+            cell.terrain = 'plains';
+            cell.moisture = 0.28;
+            cell.fertility = 0.50;
+            plainsCount++;
+          }
+        } else if (ring === 2 && scope !== 'pinpoint') {
+          // plains to forest in more temperate climates
+          const isTemperate = cell.climate === 'temperate' || cell.climate === 'tropical' || cell.climate === 'cold' || Math.abs(cell.lat) < 58;
+          if (cell.elevation > 0) {
+            if (isTemperate) {
+              cell.terrain = 'forest';
+              cell.moisture = Math.max(0.55, cell.moisture + 0.20);
+              cell.fertility = Math.max(0.65, cell.fertility + 0.20);
+              forestCount++;
+            } else {
+              cell.terrain = 'plains';
+              cell.moisture = Math.max(0.30, cell.moisture);
+              cell.fertility = Math.max(0.50, cell.fertility);
+              plainsCount++;
+            }
+          }
+        } else if (ring >= 3 && scope === 'cascade') {
+          // Outer cascade rings in temperate climates: buffer woodlands / fertile plains
+          const isTemperate = cell.climate === 'temperate' || cell.climate === 'tropical' || cell.climate === 'cold';
+          if (cell.elevation > 0) {
+            if (isTemperate && cell.moisture > 0.45) {
+              cell.terrain = 'forest';
+              forestCount++;
+            } else if (cell.terrain === 'desert') {
+              cell.terrain = 'plains';
+              plainsCount++;
+            }
+          }
+        }
+      }
+    } else if (targetTerrain === 'tundra') {
       if (ring === 0) {
-        cell.terrain = 'desert';
-        cell.moisture = 0.05;
-        cell.fertility = 0.15;
-      } else if (ring === 1 && scope !== 'pinpoint') {
-        cell.terrain = 'desert';
+        cell.terrain = 'tundra';
+        cell.climate = 'arctic';
+        cell.elevation = Math.max(0.18, cell.elevation);
         cell.moisture = 0.12;
-        cell.fertility = 0.20;
-      } else if (ring === 2 && scope !== 'pinpoint') {
-        cell.moisture = Math.max(0.15, cell.moisture - 0.25);
-        if (cell.terrain === 'forest') cell.terrain = 'plains';
+        cell.fertility = 0.15;
+        tundraCount++;
+      } else if (ring === 1 && scope !== 'pinpoint') {
+        if (cell.elevation > 0) {
+          cell.terrain = 'plains';
+          cell.moisture = 0.28;
+          cell.fertility = 0.40;
+          plainsCount++;
+        }
       }
     }
 
     updated[node.cellIndex] = cell;
   }
 
-  const multiLabel = targetIndices.length > 1 ? ` across ${targetIndices.length} blocks` : '';
+  const multiLabel = effectiveTargets.length > 1
+    ? (detectedCount > 0 ? ` (expanded across ${effectiveTargets.length} connected zones)` : ` across ${effectiveTargets.length} blocks`)
+    : '';
   let narrative = '';
   if (targetTerrain === 'volcanic') {
-    narrative = `Unleashed a volcanic caldera${multiLabel}, triggering cascading tectonic uplift (${mountainCount} mountains, ${hillsCount} foothills, and ${plainsCount + forestCount} ash-fertilized lowlands).`;
+    const expandText = detectedCount > 0 ? ` Fused with ${detectedCount} adjacent volcano${detectedCount > 1 ? 'es' : ''} to expand the volcanic caldera.` : '';
+    narrative = `Unleashed a volcanic caldera${multiLabel}${expandText}, triggering cascading tectonic uplift (${mountainCount} mountains, ${hillsCount} foothills, and ${plainsCount + forestCount} ash-fertilized lowlands).`;
   } else if (targetTerrain === 'mountains') {
-    narrative = `Raised alpine spires${multiLabel} rippling outward into ${mountainCount} mountain crests and ${hillsCount} foothills.`;
+    const hillText = isHillyArea ? ` The uplift resonated through the hilly region, generating ${mountainCount} alpine peaks and ${hillsCount} rugged highlands without forest degradation.` : '';
+    const expandText = detectedCount > 0 ? ` Fused with ${detectedCount} adjacent mountain ridge${detectedCount > 1 ? 's' : ''}.` : '';
+    narrative = `Raised alpine spires${multiLabel}${expandText}${hillText} rippling outward into ${mountainCount} mountain crests and ${hillsCount} foothills.`;
   } else if (targetTerrain === 'hills') {
-    narrative = `Erected rolling highlands${multiLabel} and ${hillsCount} hill formations descending into fertile valleys.`;
+    const expandText = detectedCount > 0 ? ` Fused with ${detectedCount} adjacent highland zone${detectedCount > 1 ? 's' : ''}.` : '';
+    narrative = `Erected rolling highlands${multiLabel}${expandText} and ${hillsCount} hill formations descending into fertile valleys.`;
   } else if (targetTerrain === 'swamp') {
     narrative = `Sank the terrain into primeval mires${multiLabel}, spreading moisture across ${swampCount} wetlands.`;
   } else if (targetTerrain === 'forest') {
     narrative = `Seeded an ancient woodland canopy${multiLabel} casting rainfall across ${forestCount} forest groves.`;
+  } else if (targetTerrain === 'shallow_water') {
+    narrative = `Formed inland lake basins and shallow waterways${multiLabel}, sinking terrain by a single tier across ${shallowsCount} waters and moistening surrounding riparian shores.`;
   } else if (targetTerrain === 'deep_ocean' || targetTerrain === 'ocean') {
     narrative = `Cleaved abyssal chasms${multiLabel}, inundating ${oceanCount} ocean depths.`;
+  } else if (targetTerrain === 'desert') {
+    if (isArcticTrigger) {
+      narrative = `Unleashed an arctic polar freeze${multiLabel}, transforming ${tundraCount} zones into frozen tundra followed by ${plainsCount} sub-polar plains.`;
+    } else {
+      narrative = `Spread sun-scorched desert sands${multiLabel}, cascading from ${desertCount} arid dunes into ${plainsCount} surrounding plains, and transitioning into ${forestCount} temperate forest borders.`;
+    }
+  } else if (targetTerrain === 'tundra') {
+    narrative = `Summoned a frozen permafrost tundra${multiLabel} across ${tundraCount} zones cascading into ${plainsCount} plains.`;
   } else {
     narrative = `Shaped the bedrock into ${targetTerrain.replace('_', ' ')}${multiLabel} across ${ringNodes.length} coordinate zones.`;
   }
@@ -1315,6 +1896,8 @@ export function applyMultiCellCascadingTerrainModification(
       swampCount,
       shallowsCount,
       oceanCount,
+      desertCount,
+      tundraCount,
       totalAffected: ringNodes.length,
       logNarrative: narrative,
     },

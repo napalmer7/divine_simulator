@@ -470,9 +470,13 @@ export default function App() {
       deityColor: playerDeity.color,
       actionType: 'Shape Land',
       cost: totalCost,
-      title: `${playerDeity.name} Cascaded ${terrain.replace('_', ' ')}${targetIndices.length > 1 ? ` across ${targetIndices.length} blocks` : ''} (${scope.toUpperCase()})`,
+      title: terrain === 'shallow_water'
+        ? `${playerDeity.name} Formed Lake / Cascaded Shallows${targetIndices.length > 1 ? ` across ${targetIndices.length} blocks` : ''} (${scope.toUpperCase()})`
+        : terrain === 'deep_ocean'
+        ? `${playerDeity.name} Cleaved Abyssal Ocean Trench${targetIndices.length > 1 ? ` across ${targetIndices.length} blocks` : ''} (${scope.toUpperCase()})`
+        : `${playerDeity.name} Cascaded ${terrain.replace('_', ' ')}${targetIndices.length > 1 ? ` across ${targetIndices.length} blocks` : ''} (${scope.toUpperCase()})`,
       description: `Wove divine will across ${targetIndices.length} adjacent block${targetIndices.length > 1 ? 's' : ''} with primary terrain synchronization and perimeter cascade.`,
-      impact: `Transformed ${res.summary.totalAffected} zones around [${firstCell.lat.toFixed(0)}°, ${firstCell.lon.toFixed(0)}°] (${res.summary.volcanoCount ? `${res.summary.volcanoCount} volcano, ` : ''}${res.summary.mountainCount ? `${res.summary.mountainCount} mountains, ` : ''}${res.summary.hillsCount ? `${res.summary.hillsCount} hills, ` : ''}${res.summary.plainsCount ? `${res.summary.plainsCount} plains, ` : ''}${res.summary.forestCount ? `${res.summary.forestCount} forests, ` : ''}${res.summary.swampCount ? `${res.summary.swampCount} swamps, ` : ''}${res.summary.shallowsCount ? `${res.summary.shallowsCount} coastal shallows` : ''}).`,
+      impact: `Transformed ${res.summary.totalAffected} zones around [${firstCell.lat.toFixed(0)}°, ${firstCell.lon.toFixed(0)}°] (${res.summary.desertCount ? `${res.summary.desertCount} desert, ` : ''}${res.summary.tundraCount ? `${res.summary.tundraCount} tundra, ` : ''}${res.summary.volcanoCount ? `${res.summary.volcanoCount} volcano, ` : ''}${res.summary.mountainCount ? `${res.summary.mountainCount} mountains, ` : ''}${res.summary.hillsCount ? `${res.summary.hillsCount} hills, ` : ''}${res.summary.plainsCount ? `${res.summary.plainsCount} plains, ` : ''}${res.summary.forestCount ? `${res.summary.forestCount} forests, ` : ''}${res.summary.swampCount ? `${res.summary.swampCount} swamps, ` : ''}${res.summary.shallowsCount ? `${res.summary.shallowsCount} coastal shallows` : ''}).`,
       category: 'creation',
     };
     setHistory((prev) => [log, ...prev]);
@@ -747,7 +751,7 @@ export default function App() {
   };
 
   // Player Action: Create Race or Subrace
-  const handleCreateRace = (newRace: Race, isSubrace: boolean) => {
+  const handleCreateRace = (newRace: Race, isSubrace: boolean, customCivName?: string) => {
     const cost = isSubrace
       ? DAWN_OF_WORLDS_COSTS.create_subrace[currentAge]
       : DAWN_OF_WORLDS_COSTS.create_race[currentAge];
@@ -759,6 +763,7 @@ export default function App() {
     // Found cradle city & civilization
     const cityId = `city_player_${Date.now()}`;
     const civId = `civ_player_${Date.now()}`;
+    const realmName = customCivName?.trim() || `Grand Realm of the ${newRace.demonym}`;
 
     const newCity: City = {
       id: cityId,
@@ -778,11 +783,11 @@ export default function App() {
       status: 'prospering',
     };
 
-    const coatOfArms = generateCoatOfArms(`Grand Realm of the ${newRace.demonym}`, newRace, playerDeity.color);
+    const coatOfArms = generateCoatOfArms(realmName, newRace, playerDeity.color);
 
     const newCiv: Civilization = {
       id: civId,
-      name: `Grand Realm of the ${newRace.demonym}`,
+      name: realmName,
       raceId: newRace.id,
       creatorDeityId: playerDeity.id,
       capitalCityId: cityId,

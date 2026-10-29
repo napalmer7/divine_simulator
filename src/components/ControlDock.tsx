@@ -357,7 +357,8 @@ export const ControlDock: React.FC<ControlDockProps> = ({
 
                 {/* Geology Action Cards */}
                 {landSubTab === 'geology' && (
-                  <div className="grid grid-cols-2 gap-2">
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
                     <button
                       onClick={() => onShapeTerrain('volcanic', shapingScope)}
                       disabled={playerPower < landCost}
@@ -446,6 +447,7 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                       onClick={() => onShapeTerrain('desert', shapingScope)}
                       disabled={playerPower < landCost}
                       className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-orange-800/60 flex items-center gap-2.5 text-left transition"
+                      title="Arid Desert Cascade: Desert → Plains → Forest in temperate climates. Triggers Frozen Tundra → Plains in arctic climates."
                     >
                       <div className="p-2 rounded-lg bg-orange-950/80 text-orange-400 border border-orange-600/40">
                         <Sun className="w-4 h-4" />
@@ -457,20 +459,89 @@ export const ControlDock: React.FC<ControlDockProps> = ({
                     </button>
 
                     <button
-                      onClick={() => onShapeTerrain('deep_ocean', shapingScope)}
+                      onClick={() => onShapeTerrain('tundra', shapingScope)}
                       disabled={playerPower < landCost}
-                      className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-sky-800/60 flex items-center gap-2.5 text-left transition"
+                      className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 border border-slate-700/60 flex items-center gap-2.5 text-left transition"
+                      title="Frozen Tundra: Frozen permafrost wastes cascading into sub-polar plains."
                     >
-                      <div className="p-2 rounded-lg bg-sky-950/80 text-sky-400 border border-sky-600/40">
-                        <Waves className="w-4 h-4" />
+                      <div className="p-2 rounded-lg bg-slate-900 text-slate-300 border border-slate-700">
+                        <ThermometerSnowflake className="w-4 h-4" />
                       </div>
                       <div>
-                        <div className="font-bold text-white text-xs">Sink Ocean</div>
+                        <div className="font-bold text-white text-xs">Frozen Tundra</div>
                         <div className="text-[10px] text-amber-400">{landCost} Power</div>
                       </div>
                     </button>
                   </div>
-                )}
+
+                  {/* Sinking Waters & Basins - 2 Stages (Create Lake vs Sink Ocean) */}
+                  <div className="mt-3 pt-3 border-t border-slate-800/80">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[11px] font-bold text-sky-300 uppercase tracking-wider flex items-center gap-1.5 font-serif">
+                        <Waves className="w-3.5 h-3.5 text-sky-400" />
+                        Sinking Waters & Basins (2 Stages)
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        1-Step Lake vs Abyss
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* Stage 1: Single Step Down / Create Lake */}
+                      <button
+                        onClick={() => onShapeTerrain('shallow_water', shapingScope)}
+                        disabled={playerPower < landCost}
+                        className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800/90 disabled:opacity-40 border border-cyan-500/50 hover:border-cyan-400 flex items-center gap-2.5 text-left transition shadow-sm group"
+                        title="Stage 1 (Single Step Down): Lowlands become inland lakes/shallows; hills drop to plains; mountains drop to hills."
+                      >
+                        <div className="p-2 rounded-lg bg-cyan-950/90 text-cyan-400 border border-cyan-500/40 group-hover:scale-105 transition-transform flex-shrink-0">
+                          <Droplets className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-bold text-white text-xs flex items-center gap-1">
+                            <span className="truncate">Create Lake</span>
+                            <span className="text-[9px] px-1 py-0.2 rounded bg-cyan-900/70 text-cyan-300 border border-cyan-600/40 font-mono flex-shrink-0">
+                              Stage 1
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-cyan-300 font-medium">
+                            1 Step Down • {landCost} P
+                          </div>
+                          <div className="text-[9px] text-slate-400 truncate mt-0.5">
+                            Land → Lake • Mtns → Hills
+                          </div>
+                        </div>
+                      </button>
+
+                      {/* Stage 2: Large Drop / Sink Deep Ocean */}
+                      <button
+                        onClick={() => onShapeTerrain('deep_ocean', shapingScope)}
+                        disabled={playerPower < landCost}
+                        className="p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800/90 disabled:opacity-40 border border-sky-600/50 hover:border-sky-400 flex items-center gap-2.5 text-left transition shadow-sm group"
+                        title="Stage 2 (Large Drop): Cleaves crust into deep abyssal ocean trench (-0.85 elevation)."
+                      >
+                        <div className="p-2 rounded-lg bg-sky-950/90 text-sky-400 border border-sky-500/40 group-hover:scale-105 transition-transform flex-shrink-0">
+                          <Waves className="w-4 h-4" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-bold text-white text-xs flex items-center gap-1">
+                            <span className="truncate">Sink Ocean</span>
+                            <span className="text-[9px] px-1 py-0.2 rounded bg-sky-900/70 text-sky-300 border border-sky-600/40 font-mono flex-shrink-0">
+                              Stage 2
+                            </span>
+                          </div>
+                          <div className="text-[10px] text-sky-300 font-medium">
+                            Large Drop • {landCost} P
+                          </div>
+                          <div className="text-[9px] text-slate-400 truncate mt-0.5">
+                            Cleaves Abyssal Trench
+                          </div>
+                        </div>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
 
                 {/* Climate Action Cards */}
                 {landSubTab === 'climate' && (

@@ -3,53 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { GoogleGenAI } from '@google/genai';
 import { HistoryLogEntry } from '../types/game';
 
 /**
- * Generates an epic mythological chronicler saga using Gemini 2.5 Flash
- * or falls back gracefully to a procedural mythic chronicle format if key is absent.
+ * Procedural fallback saga if the server is offline or lacks API key
  */
-export async function generateMythicChronicle(
-  history: HistoryLogEntry[],
-  worldName: string = 'Meglin'
-): Promise<string> {
-  const apiKey = process.env.GEMINI_API_KEY || (import.meta as any).env?.VITE_GEMINI_API_KEY;
-
-  if (apiKey) {
-    try {
-      const ai = new GoogleGenAI({ apiKey });
-      const prompt = `You are the Venerable Bede, an ancient chronicler transcribing the sacred mythological history of the fantasy world of "${worldName}".
-Here is the recorded timeline of divine actions and mortal events by the gods (Dawn of Worlds game):
-${JSON.stringify(
-  history.slice(-15).map((h) => ({
-    age: h.age,
-    round: h.round,
-    deity: h.deityName,
-    action: h.actionType,
-    title: h.title,
-    impact: h.impact,
-  })),
-  null,
-  2
-)}
-
-Write a stirring, epic mythological saga in 3-4 vivid paragraphs in the tone of The Silmarillion or an ancient Norse/Homeric Edda, detailing the creation of the lands, the awakening of races, the rivalries of the deities, and the grand destiny of the world.`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: prompt,
-      });
-
-      if (response.text) {
-        return response.text;
-      }
-    } catch (err) {
-      console.warn('Gemini chronicle generation fallback:', err);
-    }
-  }
-
-  // Fallback procedural mythic saga
+function getProceduralFallbackSaga(worldName: string): string {
   return `# The Great Saga of ${worldName}
 *Recorded by the Venerable Bede, Chronicler of the Immortals*
 
@@ -58,4 +17,100 @@ In the First Dawn, when the cosmos was yet barren stone and primeval sea, the Im
 Then dawned the Awakening of Mortal Kind. Diverse lineages arose from the soil—some carved from obsidian and mountain roots, others whispered from the deep emerald groves. Cities of stone and marble raised their banners, delving into the mysteries of metallurgy, agriculture, and high arcana.
 
 Now the winds of destiny carry the march of armies and the clashes of divine will. Alliances form and shatter across contested borderlands, while miracles and catastrophes alike shape the unfolding ages.`;
+}
+
+/**
+ * Generates an epic mythological chronicler saga by delegating to the backend server
+ * API endpoint (`/api/chronicle`), which securely calls Gemini on the server.
+ */
+export async function generateMythicChronicle(
+  history: HistoryLogEntry[],
+  worldName: string = 'Meglin'
+): Promise<string> {
+  try {
+    const res = await fetch('/api/chronicle', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ history, worldName }),
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data.text) {
+        return data.text;
+      }
+    }
+  } catch (err) {
+    console.warn('Server mythic chronicle generation failed, falling back:', err);
+  }
+
+  return getProceduralFallbackSaga(worldName);
+}
+
+/**
+ * Streams an epic mythological chronicler saga from the backend server
+ * API endpoint (`/api/chronicle/stream`) via Server-Sent Events.
+ */
+export async function generateMythicChronicleStream(
+  history: HistoryLogEntry[],
+  onChunk: (textChunk: string) => void,
+  worldName: string = 'Meglin'
+): Promise<string> {
+  try {
+    const res = await fetch('/api/chronicle/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ history, worldName }),
+    });
+
+    if (!res.ok || !res.body) {
+      // Fallback to standard request
+      return generateMythicChronicle(history, worldName);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let accumulatedText = '';
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.startsWith('data: ')) {
+          const payload = trimmed.slice(6);
+          if (payload === '[DONE]') break;
+          try {
+            const parsed = JSON.parse(payload);
+            if (parsed.text) {
+              accumulatedText += parsed.text;
+              onChunk(parsed.text);
+            }
+          } catch {
+            // Ignore non-json chunk
+          }
+        }
+      }
+    }
+
+    if (accumulatedText.trim().length > 0) {
+      return accumulatedText;
+    }
+  } catch (err) {
+    console.warn('Streaming chronicle failed, falling back to standard generation:', err);
+  }
+
+  const fallback = await generateMythicChronicle(history, worldName);
+  onChunk(fallback);
+  return fallback;
 }
